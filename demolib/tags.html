@@ -1,0 +1,143 @@
+<html>
+<head>
+<title>Supported Tags</title>
+</head>
+<body bgcolor="#EEEEFF" link="#0000FF" vlink="#FF00FF" alink="#FFFFFF" text="#000000">
+
+<h1>Supported Tags &amp; Attributes</h1>
+
+Tk::HyperText supports the following tags and attributes:
+
+<h1>Basic HTML Tags</h1>
+
+<h2><font color="#0000FF">&lt;html&gt;, &lt;head&gt;</font></h2>
+
+<blockquote>
+	It acknowledges that these elements are there, but doesn't do anything with them.
+	 But then again, nobody else does anything with them, either.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;title&gt;</font></h2>
+
+<blockquote>
+	If you specify a <code>-titlecommand</code> when configuring your HyperText widget,
+	 that callback will be invoked when a <code>&lt;TITLE&gt;</code> tag is found within
+	 the HTML code being rendered.<p>
+
+	This demonstration program uses such a callback--check out the title on this window.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;body&gt;</font></h2>
+
+<blockquote>
+	The body tag, when found, will recolor the entire HyperText widget with a provided
+	 <code>bgcolor</code> and <code>text</code> attribute. Typically, there should
+	 only be one <code>&lt;body&gt;</code> in your HTML anyway.<p>
+
+	<b><u>Supported Attributes:</u></b><br>
+	+ <b>bgcolor</b> (background color of the whole page)<br>
+	+ <b>link</b> (default hyperlink color)<br>
+	+ <b>vlink</b> (visited link color)<br>
+	+ <b>alink</b> (active link color)<br>
+	+ <b>text</b> (default text color)
+</blockquote>
+
+<h1>Text Markup</h1>
+
+<h2><font color="#0000FF">&lt;font&gt;</font></h2>
+
+<blockquote>
+	Change your font, color, size, or highlight color.<p>
+
+	<b><u>Supported Attributes:</u></b><br>
+	+ <b>face</b> (the font family)<br>
+	+ <b>size</b> (size, in HTML units, from 0 to 6)<br>
+	+ <b>color</b> (text color)<br>
+	+ <b>back</b> (<font back="#FFFF00">highlight color</font>)
+</blockquote>
+
+<h2><font color="#0000FF">&lt;a&gt;</font></h2>
+
+<blockquote>
+	The <code>&lt;a&gt;</code> tag is only supported as a means of hyperlinking. Support
+	 for in-page linking (e.g. &lt;a name&gt;) isn't working yet. If you define a
+	 <code>-linkcommand</code> in your HyperText configuration, it will be invoked whenever
+	 a hyperlink is clicked on.<p>
+
+	<b><u>Supported Attributes:</u></b><br>
+	+ <b>href</b> (the URL to link to)<br>
+	+ <b>target</b> (the intended target, e.g. _blank)
+</blockquote>
+
+<h2><font color="#0000FF">&lt;blockquote&gt;</font></h2>
+
+<blockquote>
+	Creates a block of indented text.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;p&gt;, &lt;br&gt;</font></h2>
+
+<blockquote>
+	<code>&lt;p&gt;</code> creates a block-level section of text, or it can be used
+	 by itself to insert two newlines in your page. <code>&lt;br&gt;</code> inserts a
+	 single newline.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;pre&gt;</font></h2>
+
+<blockquote>
+	Inserts a block-level element of preformatted, Courier New text.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;code&gt;, &lt;tt&gt;</font></h2>
+
+<blockquote>
+	Creates inline "typewriter" text.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;center&gt;, &lt;right&gt;, &lt;left&gt;</font></h2>
+
+<blockquote>
+	Change your text's justification to centered, right, or left.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;h1&gt; - &lt;h6&gt;</font></h2>
+
+<blockquote>
+	Create headings, as seen on this and other pages in the demo.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;sup&gt; - &lt;sub&gt;</font></h2>
+
+<blockquote>
+	Create superscripted and subscripted text, respectively.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;b&gt;, &lt;strong&gt;</font></h2>
+
+<blockquote>
+	Create <b>bold (strong)</b> text.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;i&gt;, &lt;em&gt;</font></h2>
+
+<blockquote>
+	Create <i>italicized (emphasized)</i> text.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;u&gt;, &lt;ins&gt;</font></h2>
+
+<blockquote>
+	Create <u>underlined (inserted)</u> text.
+</blockquote>
+
+<h2><font color="#0000FF">&lt;s&gt;, &lt;del&gt;</font></h2>
+
+<blockquote>
+	Create <s>overstriked (deleted)</s> text.
+</blockquote>
+
+
+
+</body>
+</html>

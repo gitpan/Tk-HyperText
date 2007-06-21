@@ -1,0 +1,44 @@
+<html>
+<head>
+<title>About</title>
+</head>
+<body bgcolor="#EEEEFF" link="#0000FF" vlink="#FF00FF" alink="#FFFFFF" text="#000000">
+
+<h1>About Tk::HyperText</h1>
+
+Tk::HyperText is a ROText-derived text widget that renders HTML code.
+
+<h1>Why Render HTML?</h1>
+
+The ability to render HTML code in a Tk widget is actually very useful. Instead
+ of dealing with all the nitty gritty stuff with text widgets and such, you can
+ just pipe plain old HTML code directly into the widget and it will render it
+ automatically into something very pretty to look at, with very little extra
+ time and effort on the programmer's side.<p>
+
+In fact, Tk::HyperText was derived from Tk::ROText, which in turn was derived
+ from Tk::Text. Because of that, you can just drop in Tk::HyperText as a replacement
+ to your current text widgets, and voila: it can now render HTML code!
+
+<h1>Example</h1>
+
+<pre>my $html = $mw-&gt;Scrolled ("HyperText",
+   -scrollbars =&gt; 'e',
+   -wrap       =&gt; 'word',
+)-&gt;pack (-fill =&gt; 'both', -expand =&gt; 1);
+
+$html-&gt;insert ("end", "&lt;b&gt;Hello, &lt;u&gt;world!&lt;/u&gt;&lt;/b&gt;");</pre>
+
+<h1>What Can Tk::HyperText Do?</h1>
+
+See the <a href="tags.html">Supported Tags &amp; Attributes</a> page.
+
+<h1>How Does Tk::HyperText Work?</h1>
+
+Well, XML parsing is a real pain in the ass in Perl, so this module doesn't use
+ a true XML parser. Actually, it reads the HTML code in sequence, making changes
+ to the Tk::Text tags when new HTML tags are found, and inserting the next bit of
+ non-html-tag text in with the current style.
+
+</body>
+</html>

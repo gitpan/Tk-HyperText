@@ -1,0 +1,12 @@
+Changes
+demo.pl
+Makefile.PL
+MANIFEST
+README
+demolib/about.html
+demolib/demo.html
+demolib/escape.html
+demolib/index.html
+demolib/tags.html
+t/Tk-HyperText.t
+lib/Tk/HyperText.pm
