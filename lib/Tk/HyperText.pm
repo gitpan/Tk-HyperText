@@ -5,7 +5,7 @@ use warnings;
 use base qw(Tk::Derived Tk::ROText);
 use Data::Dumper;
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 
 Construct Tk::Widget 'HyperText';
 
@@ -88,6 +88,7 @@ sub insert {
 		&{$cw->{hypertext}->{titlecommand}} ($cw,"");
 
 		# Render the whole entire page.
+		$cw->SUPER::delete ("0.0","end");
 		$cw->render ($cw->{hypertext}->{html});
 	}
 	else {
@@ -756,6 +757,12 @@ like this aren't too serious, though. So, if you set one attribute, set them all
 L<Tk::ROText> and L<Tk::Text>.
 
 =head1 CHANGES
+
+0.02 June 20, 2007
+
+  - Bugfix: on consecutive insert() commands (without clearing it in between),
+    the entire content of the HTML already in the widget would be inserted again,
+    in addition to the new content. This has been fixed.
 
 0.01 June 20, 2007
 
