@@ -125,6 +125,14 @@ of HTML pages. Here's an example:</p>
   )-&gt;pack;</pre>
 </dd>
 </li>
+<dt><strong><a name="item__2dbasehref"><strong>-basehref</strong></a></strong>
+
+<dd>
+<p>The ``base href'' of the webpages being rendered. This should be the local file
+path (ex. ``./demolib''). The base href can be reset using the &lt;base&gt; tag
+in a webpage. The base href is used for locating external files, such as images.</p>
+</dd>
+</li>
 </dl>
 <p>
 </p>
@@ -168,6 +176,13 @@ See <a href="#bugs">BUGS</a>. This returns the actual HTML code, not just the te
 <p>Clear the entire text widget display.</p>
 </dd>
 </li>
+<dt><strong><a name="item_clearhistory"><em>$text-&gt;</em><strong>clearHistory</strong></a></strong>
+
+<dd>
+<p>Clear the history in the text widget. This will make all the links that were ``visited
+links'' become ``unvisited links'' again.</p>
+</dd>
+</li>
 </dl>
 <p>
 </p>
@@ -178,8 +193,15 @@ See <a href="#bugs">BUGS</a>. This returns the actual HTML code, not just the te
   &lt;html&gt;, &lt;head&gt;
   &lt;title&gt;      *calls -titlecommand when found
   &lt;body&gt;       (bgcolor, link, vlink, alink, text)
+  &lt;basefont&gt;   (face, size, color)
+  &lt;base&gt;       (href)
   &lt;font&gt;       (face, size, color, back)
+  &lt;img&gt;        (src, align, hspace, vspace)*
   &lt;a&gt;          (href, target)
+  &lt;ol&gt;, &lt;ul&gt;   (type, start)
+  &lt;li&gt;
+  &lt;div&gt;        (align=left|center|right)
+  &lt;span&gt;
   &lt;blockquote&gt;
   &lt;p&gt;, &lt;br&gt;
   &lt;pre&gt;
@@ -191,6 +213,8 @@ See <a href="#bugs">BUGS</a>. This returns the actual HTML code, not just the te
   &lt;i&gt;, &lt;em&gt;
   &lt;u&gt;, &lt;ins&gt;
   &lt;s&gt;, &lt;del&gt;</pre>
+<p>* Image alignment must be ``top'', ``middle'', ``bottom'', or ``baseline''. Tk::Text doesn't
+support ``left'' and ``right'' alignments.</p>
 <p>
 </p>
 <hr />
@@ -209,6 +233,8 @@ in a later version.</p>
 set &lt;font back=``yellow''&gt;, then set &lt;font color=``red''&gt;, and then
 close the red font, it will also stop the yellow highlight color too. Situations
 like this aren't too serious, though. So, if you set one attribute, set them all. ;)</p>
+<p>There's a minor bug in the counting of alphabetic ordered lists. It counts them
+from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
 <p>
 </p>
 <hr />
@@ -218,6 +244,20 @@ like this aren't too serious, though. So, if you set one attribute, set them all
 </p>
 <hr />
 <h1><a name="changes">CHANGES</a></h1>
+<p>0.04 June 23, 2007</p>
+<pre>
+  - Added support for the &lt;basefont&gt; tag.
+  - Added support for &lt;ul&gt;, &lt;ol&gt;, and &lt;li&gt;. I've even extended the HTML specs a
+    little and added &quot;diamonds&quot; as a shape for &lt;ul&gt;, and allowed &lt;ul&gt; to specify
+    a decimal escape code (&lt;ul type=&quot;#0164&quot;&gt;)
+  - Added a &quot;page history&quot;, so that the &quot;visited link color&quot; on pages can actually
+    be applied to the links.
+  - Fixed the &lt;blockquote&gt; so that the margin applies to the right side as well.</pre>
+<p>0.02 June 20, 2007</p>
+<pre>
+  - Bugfix: on consecutive insert() commands (without clearing it in between),
+    the entire content of the HTML already in the widget would be inserted again,
+    in addition to the new content. This has been fixed.</pre>
 <p>0.01 June 20, 2007</p>
 <pre>
   - Initial release.</pre>

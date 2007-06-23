@@ -2,7 +2,7 @@
 <head>
 <title>Capabilities</title>
 </head>
-<body bgcolor="#EEEEFF" link="#0000FF" vlink="#FF00FF" alink="#FFFFFF" text="#000000">
+<body bgcolor="#EEEEFF" link="#0000FF" vlink="#FF00FF" alink="#FF0000" text="#000000">
 
 <h1>Demonstration of Capabilities</h1>
 
@@ -101,6 +101,68 @@ And finally, preformatted text, like this:<p>
 
 <br>That was ASCII art of a disk jockey, found at this site:
  <a href="http://www.chris.com/ASCII/" target="_blank">http://www.chris.com/ASCII/</a>
+
+<h1>Lists</h1>
+
+Lists include both ordered lists, and unordered lists.
+
+<ul type="disc">
+	<li>These are unordered lists.</li>
+	<li>The default icon type is "disc"</li>
+	<ul type="square">
+		<li>But, squares can also be used...</li>
+		<li>As seen here.</li>
+	</ul>
+	<li>You can also use circles.</li>
+	<ul type="circle">
+		<li>Circles are these things.</li>
+		<li>They're hollow, unlike the discs.</li>
+	</ul>
+	<li>I've extended the HTML specs and added "diams"</li>
+	<ul type="diams">
+		<li>These are diams.</li>
+		<li>They're diamonds.</li>
+	</ul>
+	<li>Or take it one step further and allow decimal escape codes.</li>
+	<ul type="#0169">
+		<li>Check out these bullets.</li>
+		<li>Copyright symbols!</li>
+		<li>&lt;ul type="#0169"&gt;</li>
+	</ul>
+</ul>
+
+Ordered lists are just as much fun.
+
+<ol type="1">
+	<li>Here's a typical ordered list.</li>
+	<li>They begin at 1 and increment from there.</li>
+	<li>How predictable.</li>
+	<ol type="i">
+		<li>But how about some lower-case Roman numerals?</li>
+		<li>But that's not all...</li>
+		<ol type="I" start="10">
+			<li>We can do uppercase ones too.</li>
+			<li>This particular set started at 10.</li>
+		</ol>
+	</ol>
+	<li>Oh, and letters, of course:</li>
+	<ol type="a">
+		<li>Lowercase ones...</li>
+		<li>And...</li>
+		<ol type="A" start="24">
+			<li>Uppercase ones!</li>
+			<li>This set started at 24.</li>
+			<li>It should roll over past 26.</li>
+			<li>Let's see what happens...</li>
+		</ol>
+	</ol>
+</ol>
+
+<h1>Images</h1>
+
+Here's a quick test of images:<p>
+
+<img src="gba.png" align="center">This is a GameBoy Advance icon.
 
 <h1>Blockquotes</h1>
 

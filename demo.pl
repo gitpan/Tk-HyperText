@@ -44,6 +44,10 @@ my $btnHome = $toolbar->Button (
 	-text    => "Home",
 	-command => \&home,
 )->pack (-side => 'left');
+my $btnClear = $toolbar->Button (
+	-text    => "Clear History",
+	-command => \&history,
+)->pack (-side => 'left');
 my $btnExit = $toolbar->Button (
 	-text    => "Exit",
 	-command => sub {
@@ -62,6 +66,7 @@ my $hypertext = $mainframe->Scrolled ("HyperText",
 	-scrollbars   => 'e',
 	-titlecommand => \&onTitle,
 	-linkcommand  => \&onLink,
+	-basehref     => "./demolib",
 	-wrap         => 'word',
 )->pack (-fill => 'both', -expand => 1);
 
@@ -135,6 +140,10 @@ sub reload {
 }
 sub home {
 	&openPage ("index.html");
+}
+sub history {
+	$hypertext->clearHistory;
+	&openPage ($url,1);
 }
 
 # This sub gets called when a page sets a <title>

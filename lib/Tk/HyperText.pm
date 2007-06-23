@@ -3,11 +3,18 @@ package Tk::HyperText;
 use strict;
 use warnings;
 use base qw(Tk::Derived Tk::ROText);
+use Tk::PNG;
+use Tk::JPEG;
 use Data::Dumper;
 
-our $VERSION = "0.02";
+our $VERSION = "0.04";
 
 Construct Tk::Widget 'HyperText';
+
+# Preload the number-to-alpha tables.
+#my %ALPHA = ();
+#@ALPHA{(1..26)} = ("a".."z");
+#@ALPHA{(27..702)} = ("aa".."zz");
 
 sub Populate {
 	my ($cw,$args) = @_;
@@ -21,6 +28,8 @@ sub Populate {
 		linkcommand => delete $args->{'-linkcommand'} || sub {},
 		# -titlecommand => a callback when a page sets its title
 		titlecommand => delete $args->{'-titlecommand'} || sub {},
+		# -basehref => the "root" of the webpage
+		basehref => delete $args->{'-basehref'} || '.',
 		# -attributes => define default attributes for each tag
 		attributes => {
 			body => {
@@ -68,6 +77,8 @@ sub Populate {
 		attributes => $opts->{attributes},
 		linkcommand => $opts->{linkcommand},
 		titlecommand => $opts->{titlecommand},
+		basehref     => $opts->{basehref},
+		history      => {}, # a history of visited links
 	};
 
 }
@@ -118,6 +129,13 @@ sub clear {
 	# Delete everything.
 	$cw->{hypertext}->{html} = '';
 	$cw->SUPER::delete ("0.0","end");
+}
+
+sub clearHistory {
+	my $cw = shift;
+
+	# Clear the history.
+	$cw->{hypertext}->{history} = {};
 }
 
 sub render {
@@ -175,23 +193,47 @@ sub render {
 		background => '',
 		justify    => 'left',   # or 'center' or 'right'
 		offset     => 0,        # changes for <sup> and <sub>
-		margin     => 0,        # for <blockquote>s
+		lmargin1   => 0,        # for <blockquote>s
+		lmargin2   => 0,        # and <ol>s
+		rmargin    => 0,        # and <ul>s
 		titling    => 0,        # special--for title tags
 		title      => '',       # our page title
 		hyperlink  => 0,        # special--for hyperlinking
 		linktag    => 0,        # for hyperlinking
 		pre        => 0,        # special--for <pre>formatted text
+		inul       => 0,        # in a <ul> section
+		inol       => 0,        # in an <ol> section
 	);
 
 	# Stack the styles up.
-	my @stackFont   = ();
-	my @stackColor  = ();
-	my @stackBG     = ();
-	my @stackSize   = ();
-	my @stackAlign  = ();
-	my @stackOffset = ();
-	my @stackMargin = ();
-	my @stackLinks  = ();
+	my @stackFont     = ();
+	my @stackColor    = ();
+	my @stackBG       = ();
+	my @stackSize     = ();
+	my @stackAlign    = ();
+	my @stackOffset   = ();
+	my @stackLMargin1 = ();
+	my @stackLMargin2 = ();
+	my @stackRMargin  = ();
+	my @stackLinks    = ();
+	my @stackOLLevel  = ();
+	my @stackULLevel  = ();
+	my @stackList     = (); # format... <ol|ul>#<level>
+	my $olLevel       = 0; # ordered list level
+	my $ulLevel       = 0; # unordered list level
+	my $olStyles      = {}; # ordered list styles
+	my $ulStyles      = {}; # unordered list styles
+	# Ex:
+	# $olStyles = {
+	#   1 => { # level 1
+	#      style    => 1, # numbers
+	#      position => 5,
+	#   },
+	#   2 => { # level 2
+	#      style    => 'i', # lowercase roman numerals
+	#      position => 0,
+	#   },
+	# }
 
 	# Set this to 1 when the first line of actual text has been written.
 	# Blocklevel elements like to know.
@@ -201,6 +243,7 @@ sub render {
 	my %hyperlinks = ();
 
 	# Start parsing through the HTML code.
+	my $lastTag;
 	foreach my $sector (@parts) {
 		# Is this a tag we're in?
 		if ($sector =~ /^::START::TAG%/i) {
@@ -208,6 +251,7 @@ sub render {
 
 			# Find out the name of this tag and its attributes.
 			my ($name,$attr) = split(/\s+/, $sector, 2);
+			$attr = '' unless defined $attr;
 			$name = uc($name);
 
 			next unless defined $name && length $name;
@@ -254,6 +298,23 @@ sub render {
 			elsif ($name eq "/BODY") { # </body>
 				# Technically we shouldn't allow anymore HTML at this point,
 				# on account of the </body>, but let's not be too picky.
+			}
+			elsif ($name eq "BASEFONT") { # <basefont>
+				# Collect as much data as we can.
+				if ($attr =~ /face="(.+?)"/i) {
+					$default{font} = $1;
+				}
+				if ($attr =~ /size="(.+?)"/i) {
+					$default{size} = $1;
+				}
+				if ($attr =~ /color="(.+?)"/i) {
+					$default{text} = $1;
+				}
+			}
+			elsif ($name eq "BASE") { # <base>
+				if ($attr =~ /href="(.+?)"/i) {
+					$cw->{hypertext}->{basehref} = $1;
+				}
 			}
 			elsif ($name eq "FONT") { # <font>
 				# Collect info.
@@ -317,14 +378,40 @@ sub render {
 			}
 			elsif ($name eq "BLOCKQUOTE") { # <blockquote>
 				$cw->SUPER::insert ('end',"\x0a\x0a") if $lineWritten;
-				$style{margin} += 25;
-				push (@stackMargin,$style{margin});
+				$style{lmargin1} += 25;
+				$style{lmargin2} += 25;
+				$style{rmargin} += 25;
+				push (@stackLMargin1,$style{lmargin1});
+				push (@stackLMargin2,$style{lmargin2});
 			}
 			elsif ($name eq "/BLOCKQUOTE") { # </blockquote>
-				pop(@stackMargin);
-				$style{margin} = $stackMargin[-1] || 0;
+				pop(@stackLMargin1);
+				pop(@stackLMargin2);
+				pop(@stackRMargin);
+				$style{lmargin1} = $stackLMargin1[-1] || 0;
+				$style{lmargin2} = $stackLMargin2[-1] || 0;
+				$style{rmargin} = $stackRMargin[-1] || 0;
 				$cw->SUPER::insert ('end',"\x0a\x0a");
 				$lineWritten = 0;
+			}
+			elsif ($name eq "DIV") { # <div>
+				$cw->SUPER::insert ('end',"\x0a") if $lineWritten;
+				if ($attr =~ /align="(.+?)"/i) {
+					my $align = $1;
+					$align = 'left' unless $align =~ /^(left|center|right)$/i;
+					#print "align: $align\n";
+					$align = lc($align);
+					push (@stackAlign,$align);
+					$style{justify} = $align;
+				}
+			}
+			elsif ($name eq "/DIV") { # </div>
+				pop(@stackAlign);
+				$style{justify} = $stackAlign[-1] || 'left';
+				$cw->SUPER::insert ('end',"\x0a");
+			}
+			elsif ($name eq "SPAN" || $name eq "/SPAN") { # <span>, </span>
+				# We'll deal with this when we implement... *gasp* StyleSheets!
 			}
 			elsif ($name eq "P") { # <p>
 				$cw->SUPER::insert ('end',"\x0a\x0a") if $lineWritten;
@@ -347,6 +434,151 @@ sub render {
 				$style{family} = $stackFont[-1] || '';
 				$style{pre} = 0;
 				$cw->SUPER::insert ('end',"\x0a");
+			}
+			elsif ($name eq "OL") { # <ol>
+				if ($style{inol} == 0 && $style{inul} == 0 && $lineWritten) {
+					$cw->SUPER::insert ('end',"\x0a\x0a");
+				}
+				elsif ($style{inol} || $style{inul}) {
+					$cw->SUPER::insert ('end',"\x0a");
+				}
+				$style{lmargin1} += 15;
+				$style{lmargin2} += 30;
+				$style{inol}++;
+				$olLevel++;
+
+				# Find out any info.
+				my $type  = 1;
+				my $start = 1;
+				if ($attr =~ /type="(.+?)"/i) {
+					$type = $1;
+				}
+				if ($attr =~ /start="(.+?)"/i) {
+					$start = $1;
+				}
+
+				$olStyles->{$olLevel} = {
+					type     => $type,
+					position => $start,
+				};
+
+				push (@stackList,join("#","ol",$olLevel));
+				push (@stackOLLevel,$olLevel);
+				push (@stackLMargin1,$style{lmargin1});
+				push (@stackLMargin2,$style{lmargin2});
+
+				#print "<ol> found: type=$type; start=$start\n";
+			}
+			elsif ($name eq "/OL") { # </ol>
+				pop(@stackList);
+				pop(@stackLMargin1);
+				pop(@stackLMargin2);
+				$style{lmargin1} = $stackLMargin1[-1] || 0;
+				$style{lmargin2} = $stackLMargin2[-1] || 0;
+				my $lastLevel = pop(@stackOLLevel);
+				$style{olLevel} = $stackOLLevel[-1] || 0;
+				delete $olStyles->{$lastLevel};
+
+				$style{inol}--;
+				$olLevel--;
+				$olLevel = 0 if $olLevel < 0;
+				$style{inol} = 0 if $style{inol} < 0;
+
+				if ($style{inol} || $style{inul}) {
+					$cw->SUPER::insert ('end',"\x0a");
+				}
+				else {
+					$cw->SUPER::insert ('end',"\x0a\x0a");
+				}
+			}
+			elsif ($name eq "UL") { # <ul>
+				if ($style{inol} == 0 && $style{inul} == 0 && $lineWritten) {
+					$cw->SUPER::insert ('end',"\x0a\x0a");
+				}
+				elsif ($style{inol} || $style{inul}) {
+					$cw->SUPER::insert ('end',"\x0a");
+				}
+				$style{lmargin1} += 15;
+				$style{lmargin2} += 30;
+				$style{inul}++;
+				$ulLevel++;
+
+				# Find out any info.
+				my $type  = "disc";
+				if ($attr =~ /type="(.+?)"/i) {
+					$type = $1;
+				}
+
+				$ulStyles->{$ulLevel} = {
+					type     => $type,
+				};
+
+				push (@stackList,join("#","ul",$ulLevel));
+				push (@stackULLevel,$ulLevel);
+				push (@stackLMargin1,$style{lmargin1});
+				push (@stackLMargin2,$style{lmargin2});
+
+				#print "<ul> found: type=$type\n";
+			}
+			elsif ($name eq "/UL") { # </ul>
+				pop(@stackList);
+				pop(@stackLMargin1);
+				pop(@stackLMargin2);
+				$style{lmargin1} = $stackLMargin1[-1] || 0;
+				$style{lmargin2} = $stackLMargin2[-1] || 0;
+				my $lastLevel = pop(@stackOLLevel);
+				$style{ulLevel} = $stackULLevel[-1] || 0;
+				delete $ulStyles->{$lastLevel};
+
+				$style{inul}--;
+				$ulLevel--;
+				$ulLevel = 0 if $ulLevel < 0;
+				$style{inul} = 0 if $style{inul} < 0;
+
+				if ($style{inol} || $style{inul}) {
+					$cw->SUPER::insert ('end',"\x0a");
+				}
+				else {
+					$cw->SUPER::insert ('end',"\x0a\x0a");
+				}
+			}
+			elsif ($name eq "LI") { # <li>
+				# The code for this must be in-general, as both <ul> and <ol>
+				# need to use this tag.
+				if (scalar(@stackList)) {
+					my ($family,$level) = split(/#/, $stackList[-1], 2);
+					my $kind  = '';
+					my $begin = 0;
+					if ($family eq "ol") {
+						$kind = $olStyles->{$level}->{type};
+						$begin = $olStyles->{$level}->{position};
+					}
+					else {
+						$kind = $ulStyles->{$level}->{type};
+						$begin = $ulStyles->{$level}->{position};
+					}
+
+					#print "<li> found (type=$kind; start=$begin)\n";
+
+					if ($family eq "ol") {
+						$olStyles->{$level}->{position}++;
+						my $symbol = $cw->_getOLsym ($kind,$begin);
+						my $symTag = $cw->_makeTag (\%style,\%default,\%hyperlinks);
+
+						#print "insert: $symbol.\n";
+						$symbol .= ".";
+						$symbol .= " " until length $symbol >= 8;
+						$cw->SUPER::insert ('end',"$symbol",$symTag);
+					}
+					else {
+						my $symbol = $cw->_getULsym ($kind);
+						my $symTag = $cw->_makeTag (\%style,\%default,\%hyperlinks);
+						$cw->SUPER::insert ('end',"$symbol  ",$symTag);
+					}
+				}
+			}
+			elsif ($name eq "/LI") { # </li>
+				$cw->SUPER::insert ('end',"\x0a",$lastTag);
 			}
 			elsif ($name =~ /^(CODE|TT)$/) { # <code>, <tt>
 				push (@stackFont,"Courier New");
@@ -436,6 +668,67 @@ sub render {
 			elsif ($name =~ /^\/(S|DEL)$/) { # </s>, </del>
 				$style{overstrike} = 0;
 			}
+			elsif ($name eq "IMG") { # <img>
+				# Must have a source.
+				my $base = $cw->{hypertext}->{basehref};
+				if ($attr =~ /src="(.+?)"/i) {
+					my $file = $1;
+					my $path = join ("/",$base,$file);
+
+					# Make sure this file exists.
+					if (-f $path) {
+						# Determine the type.
+						my $type = '';
+						if ($file =~ /\.(jpg|jpeg|jpe)$/i) {
+							$type = "JPEG";
+						}
+						elsif ($file =~ /\.gif$/i) {
+							$type = "GIF";
+						}
+						elsif ($file =~ /\.png$/i) {
+							$type = "PNG";
+						}
+						elsif ($file =~ /\.bmp$/i) {
+							$type = "BMP";
+						}
+
+						if (length $type) {
+							# See if the user defined hspace and vspace.
+							my $hspace = 0;
+							my $vspace = 0;
+
+							if ($attr =~ /hspace="(.+?)"/i) {
+								$hspace = $1;
+							}
+							if ($attr =~ /vspace="(.+?)"/i) {
+								$hspace = $1;
+							}
+
+							# Image alignment is only vertical.
+							my $align = "center";
+							if ($attr =~ /align="(.+?)"/i) {
+								$align = $1;
+							}
+							$align = "baseline" unless $align =~ /^(top|center|bottom|baseline)$/i;
+							$align = lc($align);
+
+							# Create it as a child of the text widget.
+							my $pic = $cw->SUPER::Photo (
+								-file   => $path,
+								-format => $type,
+							);
+
+							# Insert it.
+							$cw->SUPER::imageCreate ("end",
+								-image => $pic,
+								-align => $align,
+								-padx  => $hspace,
+								-pady  => $vspace,
+							);
+						}
+					}
+				}
+			}
 			next;
 		}
 		elsif ($sector =~ /^::END::TAG%/i) {
@@ -450,52 +743,8 @@ sub render {
 		}
 
 		# (Re)invent a new tag.
-		my $tag = join ("-",
-			$style{family} || $default{font},
-			$style{size} || $default{size},
-			$style{foreground} || $default{text},
-			$style{background} || $default{bgcolor},
-			$style{weight},
-			$style{slant},
-			$style{underline},
-			$style{overstrike},
-			$style{justify},
-			$style{offset},
-			$style{margin},
-			$style{hyperlink},
-			$style{linktag},
-			$style{pre},
-		);
-		$tag =~ s/\s+/+/ig; # convert spaces to +'s.
-
-		# Is this a special hyperlink tag?
-		my $color = $style{foreground} || $default{text};
-		my $uline = $style{underline};
-		my $size  = (length $style{size} > 0) ? $style{size} : $default{size};
-		my $ptsize = $cw->_size ($size);
-		if ($style{hyperlink} == 1) {
-			# Temporarily reset the color and underline.
-			$color = $default{link};
-			$uline = 1;
-		}
-
-		# Configure this tag.
-		$cw->SUPER::tagConfigure ($tag,
-			-foreground => $color,
-			-background => $style{background},
-			-font       => [
-				-family     => $style{family} || $default{font},
-				-weight     => $style{weight},
-				-slant      => $style{slant},
-				-size       => $ptsize,
-				-underline  => $uline,
-				-overstrike => $style{overstrike},
-			],
-			-offset     => $style{offset},
-			-justify    => $style{justify},
-			-lmargin1   => $style{margin},
-			-lmargin2   => $style{margin},
-		);
+		my $tag = $cw->_makeTag (\%style,\%default,\%hyperlinks);
+		$lastTag = $tag;
 
 		# If this was a hyperlink...
 		if ($style{hyperlink} == 1) {
@@ -503,19 +752,43 @@ sub render {
 			my $href = $hyperlinks{$style{linktag}}->{href};
 			my $target = $hyperlinks{$style{linktag}}->{target};
 			$cw->SUPER::tagBind ($tag,"<Button-1>", [ sub {
-				my ($parent,$href,$target) = @_;
+				my ($parent,$tag,$href,$target) = @_;
+
+				# Add this to the history.
+				$parent->{hypertext}->{history}->{$href} = 1;
+
+				# Recolor this link.
+				$parent->SUPER::tagConfigure ($tag,
+					-foreground => $default{vlink},
+				);
 
 				# Call our link command.
 				&{$cw->{hypertext}->{linkcommand}} ($parent,$href,$target);
-			}, $href, $target ]);
+			}, $tag, $href, $target ]);
 
 			# Set up the hand cursor.
-			$cw->SUPER::tagBind ($tag,"<Any-Enter>", sub {
+			$cw->SUPER::tagBind ($tag,"<Any-Enter>", [ sub {
+				my ($parent,$tag) = @_;
 				$cw->SUPER::configure (-cursor => 'hand2');
-			});
-			$cw->SUPER::tagBind ($tag,"<Any-Leave>", sub {
+				$cw->SUPER::tagConfigure ($tag,
+					-foreground => $default{alink},
+				);
+			}, $tag ]);
+			$cw->SUPER::tagBind ($tag,"<Any-Leave>", [ sub {
+				my ($parent,$tag,$href) = @_;
 				$cw->SUPER::configure (-cursor => 'xterm');
-			});
+
+				if (exists $cw->{hypertext}->{history}->{$href}) {
+					$cw->SUPER::tagConfigure ($tag,
+						-foreground => $default{vlink},
+					);
+				}
+				else {
+					$cw->SUPER::tagConfigure ($tag,
+						-foreground => $default{link},
+					);
+				}
+			}, $tag, $href ]);
 		}
 
 		# If this was preformatted text, preserve the line endings and spacing.
@@ -523,8 +796,8 @@ sub render {
 			# Leave it alone.
 		}
 		else {
-			$sector =~ s/\x0d//sg;
-			$sector =~ s/\x0a+//sg;
+			$sector =~ s/\x0d//smg;
+			$sector =~ s/\x0a+//smg;
 			$sector =~ s/\s+/ /sg;
 		}
 
@@ -551,6 +824,77 @@ sub render {
 		# Finally, insert this bit of text.
 		$cw->SUPER::insert ('end',$sector,$tag);
 	}
+}
+
+sub _makeTag {
+	my ($cw,$refstyle,$refdefault,$reflinks) = @_;
+
+	my %style = %{$refstyle};
+	my %default = %{$refdefault};
+	my %hyperlinks = %{$reflinks};
+
+	# (Re)invent a new tag.
+	my $tag = join ("-",
+		$style{family} || $default{font},
+		$style{size} || $default{size},
+		$style{foreground} || $default{text},
+		$style{background} || $default{bgcolor},
+		$style{weight},
+		$style{slant},
+		$style{underline},
+		$style{overstrike},
+		$style{justify},
+		$style{offset},
+		$style{lmargin1},
+		$style{lmargin2},
+		$style{rmargin},
+		$style{hyperlink},
+		$style{linktag},
+		$style{pre},
+	);
+	$tag =~ s/\s+/+/ig; # convert spaces to +'s.
+
+	# Is this a special hyperlink tag?
+	my $color = $style{foreground} || $default{text};
+	my $uline = $style{underline};
+	my $size  = (length $style{size} > 0) ? $style{size} : $default{size};
+	my $ptsize = $cw->_size ($size);
+	if ($style{hyperlink} == 1) {
+		# Temporarily reset the color and underline.
+		my $href = $hyperlinks{$style{linktag}}->{href};
+
+		#print "link href: $href\n";
+
+		if (exists $cw->{hypertext}->{history}->{$href}) {
+			$color = $default{vlink};
+		}
+		else {
+			$color = $default{link};
+		}
+
+		$uline = 1;
+	}
+
+	# Configure this tag.
+	$cw->SUPER::tagConfigure ($tag,
+		-foreground => $color,
+		-background => $style{background},
+		-font       => [
+			-family     => $style{family} || $default{font},
+			-weight     => $style{weight},
+			-slant      => $style{slant},
+			-size       => $ptsize,
+			-underline  => $uline,
+			-overstrike => $style{overstrike},
+		],
+		-offset     => $style{offset},
+		-justify    => $style{justify},
+		-lmargin1   => $style{lmargin1},
+		-lmargin2   => $style{lmargin2},
+		-rmargin    => $style{rmargin},
+	);
+
+	return $tag;
 }
 
 sub _size {
@@ -597,6 +941,163 @@ sub _heading {
 	);
 
 	return $sizes{$level};
+}
+
+sub _getOLsym {
+	my ($cw,$type,$pos) = @_;
+
+	my %letterhash = (
+		0 => '',
+		1 => 'A',
+		2 => 'B',
+		3 => 'C',
+		4 => 'D',
+		5 => 'E',
+		6 => 'F',
+		7 => 'G',
+		8 => 'H',
+		9 => 'I',
+		10 => 'J',
+		11 => 'K',
+		12 => 'L',
+		13 => 'M',
+		14 => 'N',
+		15 => 'O',
+		16 => 'P',
+		17 => 'Q',
+		18 => 'R',
+		19 => 'S',
+		20 => 'T',
+		21 => 'U',
+		22 => 'V',
+		23 => 'W',
+		24 => 'X',
+		25 => 'Y',
+		26 => 'Z',
+	);
+
+	# Numeric types are easy.
+	if ($type =~ /^[0-9]+$/) {
+		return $pos;
+	}
+	elsif ($type eq "I") {
+		return Roman($pos);
+	}
+	elsif ($type eq "i") {
+		# Roman numerals.
+		return roman($pos);
+	}
+	elsif ($type eq 'a' || $type eq 'A') { # letters
+		my $input = $pos;
+		my $string = '';
+		while ($input > 26) {
+			my $first = $input % 26;
+			my $second = ($input - $first) / 26;
+			$string = $letterhash{$first} . $string;
+			$input = $second;
+		}
+
+		$string = $letterhash{$input} . $string;
+		return $string;
+	}
+	elsif ($type eq "A") { # caps
+		#return uc($ALPHA{$pos});
+	}
+
+	return $pos;
+}
+
+sub _getULsym {
+	my ($cw,$type) = @_;
+
+	my $circle = chr(0x25cb);
+	my $disc   = chr(0x25cf);
+	my $square = chr(0x25aa);
+	my $diam   = chr(0x25c6);
+
+	if ($type =~ /circle/i) {
+		return $circle;
+	}
+	elsif ($type =~ /square/i) {
+		return $square;
+	}
+	elsif ($type =~ /disc/i) {
+		return $disc;
+	}
+	elsif ($type =~ /diam/i) {
+		return $diam;
+	}
+
+	elsif ($type =~ /^#([^;]+?)$/) {
+		my $decimal = $1;
+		my $hex = sprintf ("%x", $decimal);
+		my $qm = quotemeta("&#$decimal;");
+		my $chr = eval "0x$hex";
+		my $char = chr($chr);
+		return $char;
+	}
+
+	return $type;
+}
+
+################################
+# Copied from Roman.pm to make #
+# our code more independent.   #
+################################
+
+our %roman2arabic = qw(I 1 V 5 X 10 L 50 C 100 D 500 M 1000);
+my %roman_digit = qw(1 IV 10 XL 100 CD 1000 MMMMMM);
+my @figure = reverse sort keys %roman_digit;
+#my %roman_digit;
+$roman_digit{$_} = [split(//, $roman_digit{$_}, 2)] foreach @figure;
+
+sub isroman($) {
+    my $arg = shift;
+    $arg ne '' and
+      $arg =~ /^(?: M{0,3})
+                (?: D?C{0,3} | C[DM])
+                (?: L?X{0,3} | X[LC])
+                (?: V?I{0,3} | I[VX])$/ix;
+}
+
+sub arabic($) {
+    my $arg = shift;
+    isroman $arg or return undef;
+    my($last_digit) = 1000;
+    my($arabic);
+    foreach (split(//, uc $arg)) {
+        my($digit) = $roman2arabic{$_};
+        $arabic -= 2 * $last_digit if $last_digit < $digit;
+        $arabic += ($last_digit = $digit);
+    }
+    $arabic;
+}
+
+sub Roman($) {
+    my $arg = shift;
+    0 < $arg and $arg < 4000 or return undef;
+    my($x, $roman);
+    foreach (@figure) {
+        my($digit, $i, $v) = (int($arg / $_), @{$roman_digit{$_}});
+        if (1 <= $digit and $digit <= 3) {
+            $roman .= $i x $digit;
+        } elsif ($digit == 4) {
+            $roman .= "$i$v";
+        } elsif ($digit == 5) {
+            $roman .= $v;
+        } elsif (6 <= $digit and $digit <= 8) {
+            $roman .= $v . $i x ($digit - 5);
+        } elsif ($digit == 9) {
+            $roman .= "$i$x";
+        }
+        $arg -= $digit * $_;
+        $x = $i;
+    }
+    $roman;
+}
+
+sub roman($) {
+    lc Roman shift;
 }
 
 1;
@@ -677,6 +1178,12 @@ of HTML pages. Here's an example:
     },
   )->pack;
 
+=item B<-basehref>
+
+The "base href" of the webpages being rendered. This should be the local file
+path (ex. "./demolib"). The base href can be reset using the E<lt>baseE<gt> tag
+in a webpage. The base href is used for locating external files, such as images.
+
 =back
 
 =head1 DESCRIPTION
@@ -712,6 +1219,11 @@ See L<"BUGS">. This returns the actual HTML code, not just the text that's been 
 
 Clear the entire text widget display.
 
+=item I<$text-E<gt>>B<clearHistory>
+
+Clear the history in the text widget. This will make all the links that were "visited
+links" become "unvisited links" again.
+
 =back
 
 =head1 SUPPORTED HTML
@@ -721,8 +1233,15 @@ The following HTML tags and attributes are fully supported by this module:
   <html>, <head>
   <title>      *calls -titlecommand when found
   <body>       (bgcolor, link, vlink, alink, text)
+  <basefont>   (face, size, color)
+  <base>       (href)
   <font>       (face, size, color, back)
+  <img>        (src, align, hspace, vspace)*
   <a>          (href, target)
+  <ol>, <ul>   (type, start)
+  <li>
+  <div>        (align=left|center|right)
+  <span>
   <blockquote>
   <p>, <br>
   <pre>
@@ -734,6 +1253,9 @@ The following HTML tags and attributes are fully supported by this module:
   <i>, <em>
   <u>, <ins>
   <s>, <del>
+
+* Image alignment must be "top", "middle", "bottom", or "baseline". Tk::Text doesn't
+support "left" and "right" alignments.
 
 =head1 EXAMPLE
 
@@ -752,11 +1274,24 @@ set E<lt>font back="yellow"E<gt>, then set E<lt>font color="red"E<gt>, and then
 close the red font, it will also stop the yellow highlight color too. Situations
 like this aren't too serious, though. So, if you set one attribute, set them all. ;)
 
+There's a minor bug in the counting of alphabetic ordered lists. It counts them
+from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.
+
 =head1 SEE ALSO
 
 L<Tk::ROText> and L<Tk::Text>.
 
 =head1 CHANGES
+
+0.04 June 23, 2007
+
+  - Added support for the <basefont> tag.
+  - Added support for <ul>, <ol>, and <li>. I've even extended the HTML specs a
+    little and added "diamonds" as a shape for <ul>, and allowed <ul> to specify
+    a decimal escape code (<ul type="#0164">)
+  - Added a "page history", so that the "visited link color" on pages can actually
+    be applied to the links.
+  - Fixed the <blockquote> so that the margin applies to the right side as well.
 
 0.02 June 20, 2007
 

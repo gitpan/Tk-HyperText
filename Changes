@@ -1,9 +1,22 @@
 Revision history for Perl extension Tk::HyperText.
 
-0.02  Wed Jun 20 23:17:30 2007
-	- Minor bugfix. See pod for details.
+0.04 June 23, 2007
 
-0.01  Wed Jun 20 22:04:42 2007
-	- original version; created by h2xs 1.23 with options
-		-X -n Tk::HyperText
+  - Added support for the <basefont> tag.
+  - Added support for <ul>, <ol>, and <li>. I've even extended the HTML specs a
+    little and added "diamonds" as a shape for <ul>, and allowed <ul> to specify
+    a decimal escape code (<ul type="#0164">)
+  - Added a "page history", so that the "visited link color" on pages can actually
+    be applied to the links.
+  - Fixed the <blockquote> so that the margin applies to the right side as well.
+
+0.02 June 20, 2007
+
+  - Bugfix: on consecutive insert() commands (without clearing it in between),
+    the entire content of the HTML already in the widget would be inserted again,
+    in addition to the new content. This has been fixed.
+
+0.01 June 20, 2007
+
+  - Initial release.
 
