@@ -20,6 +20,8 @@
 	<li><a href="#description">DESCRIPTION</a></li>
 	<li><a href="#widget_methods">WIDGET METHODS</a></li>
 	<li><a href="#supported_html">SUPPORTED HTML</a></li>
+	<li><a href="#supported_css">SUPPORTED CSS</a></li>
+	<li><a href="#images">IMAGES</a></li>
 	<li><a href="#example">EXAMPLE</a></li>
 	<li><a href="#bugs">BUGS</a></li>
 	<li><a href="#see_also">SEE ALSO</a></li>
@@ -183,6 +185,35 @@ See <a href="#bugs">BUGS</a>. This returns the actual HTML code, not just the te
 links'' become ``unvisited links'' again.</p>
 </dd>
 </li>
+<dt><strong><a name="item_namesmode"><em>$text-&gt;</em><strong>namesMode</strong> <em>([new-mode])</em></a></strong>
+
+<dd>
+<p>Change the permissions mode. Valid options are <code>allow_all, allow_some, deny_some, deny_all</code>.
+The default is <code>allow_all</code>. Returns the current mode.</p>
+</dd>
+</li>
+<dt><strong><a name="item_namesallow"><em>$text-&gt;</em><strong>namesAllow</strong> <em>([tag-list])</em></a></strong>
+
+<dd>
+<p>Add the list of tags to the allow list when the permissions mode is set to <code>allow_some</code>, or
+removes them from the deny list if the mode is <code>deny_some</code>.</p>
+</dd>
+<dd>
+<pre>
+  $hypertext-&gt;namesAllow (&quot;&lt;body&gt;&quot;, &quot;&lt;font&gt;&quot;, &quot;&lt;br&gt;&quot;);</pre>
+</dd>
+</li>
+<dt><strong><a name="item_namesdeny"><em>$text-&gt;</em><strong>namesDeny</strong> <em>([tag-list])</em></a></strong>
+
+<dd>
+<p>Add the list of tags to the deny list when the permissions mode is set to <code>deny_some</code>, or
+removes them from the allow list if the mode is <code>allow_some</code>.</p>
+</dd>
+<dd>
+<pre>
+  $hypertext-&gt;namesDeny (&quot;&lt;img&gt;&quot;, &quot;&lt;hr&gt;&quot;);</pre>
+</dd>
+</li>
 </dl>
 <p>
 </p>
@@ -192,11 +223,14 @@ links'' become ``unvisited links'' again.</p>
 <pre>
   &lt;html&gt;, &lt;head&gt;
   &lt;title&gt;      *calls -titlecommand when found
+  &lt;link&gt;       (type media href)
+  &lt;style&gt;      (type)
   &lt;body&gt;       (bgcolor, link, vlink, alink, text)
   &lt;basefont&gt;   (face, size, color)
   &lt;base&gt;       (href)
   &lt;font&gt;       (face, size, color, back)
   &lt;img&gt;        (src, align, hspace, vspace)*
+  &lt;hr&gt;         (size, width)
   &lt;a&gt;          (href, target)
   &lt;ol&gt;, &lt;ul&gt;   (type, start)
   &lt;li&gt;
@@ -205,16 +239,56 @@ links'' become ``unvisited links'' again.</p>
   &lt;blockquote&gt;
   &lt;p&gt;, &lt;br&gt;
   &lt;pre&gt;
-  &lt;code&gt;, &lt;tt&gt;
+  &lt;code&gt;, &lt;tt&gt;, &lt;kbd&gt;, &lt;samp&gt;
   &lt;center&gt;, &lt;right&gt;, &lt;left&gt;
   &lt;h1&gt; - &lt;h6&gt;
   &lt;sup&gt;, &lt;sub&gt;
   &lt;b&gt;, &lt;strong&gt;
-  &lt;i&gt;, &lt;em&gt;
+  &lt;i&gt;, &lt;em&gt;, &lt;address&gt;, &lt;var&gt;, &lt;cite&gt;, &lt;def&gt;
   &lt;u&gt;, &lt;ins&gt;
   &lt;s&gt;, &lt;del&gt;</pre>
 <p>* Image alignment must be ``top'', ``middle'', ``bottom'', or ``baseline''. Tk::Text doesn't
 support ``left'' and ``right'' alignments.</p>
+<p>
+</p>
+<hr />
+<h1><a name="supported_css">SUPPORTED CSS</a></h1>
+<p>CSS support is relatively new as of version 0.05. The following ``kinds'' of CSS are
+supported:</p>
+<pre>
+  External CSS files (&lt;link type=&quot;text/css&quot; href=&quot;external.css&quot;&gt;)
+  Internal CSS code (&lt;style type=&quot;text/css&quot;&gt;)</pre>
+<p>The following type is <strong>NOT</strong> supported:</p>
+<pre>
+  Inline CSS (&lt;span style=&quot;...&quot;&gt;)</pre>
+<p>As far as the actual CSS code, the following attributes are supported:</p>
+<pre>
+  background       (only the &quot;color&quot; part)
+  background-color
+  font-family
+  font-size        *
+  font-style
+  font-weight      (bold, lighter, normal--lighter is the same as normal)
+  text-decoration  (none, underline, line-thru)
+  text-align       (left, center, right)
+  color</pre>
+<p>* With <code>font-size</code>, if you don't specify a unit of measurement, it's taken as
+a regular HTML font size (range 1 through 6). If you do specify a unit (i.e. px,
+pt, em, etc), the font size will be taken as a <strong>point size</strong>.</p>
+<p>
+</p>
+<hr />
+<h1><a name="images">IMAGES</a></h1>
+<p>A couple of default images were provided within the module (Base64-encoded) to
+display when something is wrong with an image in your HTML code.</p>
+<p><code>$Tk::HyperText::IMG_BROKEN</code> is the Base64 data for the ``image not found'' image.
+It displays as a PNG image of a red ``X'' within a sunken-bordered box.</p>
+<p><code>$Tk::HyperText::IMG_INVALID</code> is the Base64 data for the ``invalid image data''
+image. It displays as a PNG image of a yellow exclamation mark within a sunken
+box.</p>
+<p>These images are included in their regular PNG form in the distribution of
+Tk::HyperText. You can reset these variables in your program if you'd like to
+have customized default images to handle these cases.</p>
 <p>
 </p>
 <hr />
@@ -229,10 +303,6 @@ supports hyperlinks that link from one page to another.</p>
 <p>As noted above, the <strong>insert</strong> method only inserts at the end, <strong>delete</strong> deletes
 everything, and <strong>get</strong> gets everything. I plan on coming up with a way to fix this
 in a later version.</p>
-<p>There are some forms of HTML that might not render properly. For instance, if you
-set &lt;font back=``yellow''&gt;, then set &lt;font color=``red''&gt;, and then
-close the red font, it will also stop the yellow highlight color too. Situations
-like this aren't too serious, though. So, if you set one attribute, set them all. ;)</p>
 <p>There's a minor bug in the counting of alphabetic ordered lists. It counts them
 from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
 <p>
@@ -244,6 +314,24 @@ from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
 </p>
 <hr />
 <h1><a name="changes">CHANGES</a></h1>
+<p>0.05 July 11, 2007</p>
+<pre>
+  - Added support for &quot;tag permissions&quot;, so that you can allow/deny specific tags from
+    being rendered (i.e. say you're making a chat client which uses HTML and you don't
+    want people inserting images into their messages, or style sheets, etc)
+  - Added the tags &lt;address&gt;, &lt;var&gt;, &lt;cite&gt;, and &lt;def&gt;.
+  - Added the &lt;hr&gt; tag.
+  - Added two &quot;default images&quot; that are displayed when an &lt;img&gt; tag tries to show
+    an image that couldn't be found, or was found but is a file type that isn't
+    supported (e.g. &lt;img src=&quot;index.html&quot;&gt; would show an &quot;invalid image&quot; icon).
+  - Bug fix: every opened tag that modifies your style will now copy all the other
+    stacks. As a result, opening &lt;font back=&quot;yellow&quot;&gt;, then &lt;font color=&quot;red&quot;&gt;, and
+    then closing the red font, will still apply the yellow background to the following
+    text. The same is true for every tag.
+  - Added some support for Cascading StyleSheets.
+  - Added some actual use for the &quot;active link color&quot;: it's used as the hover color
+    on links (using it as a true active color is mostly useless, since most of the
+    time the page won't remain very long when clicking on a link to even see it)</pre>
 <p>0.04 June 23, 2007</p>
 <pre>
   - Added support for the &lt;basefont&gt; tag.
