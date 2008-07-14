@@ -1,72 +1,55 @@
 package Tk::HyperText;
 
+##########################################################
+# Look to the end of this file for the POD documentation #
+##########################################################
+
 use strict;
 use warnings;
 use base qw(Tk::Derived Tk::ROText);
 use Tk::PNG;
 use Tk::JPEG;
+use Tk::BrowseEntry;
+use Tk::Listbox;
+use Tk::Text;
+use HTML::TokeParser;
 use Data::Dumper;
+use URI::Escape;
 
-our $VERSION = "0.05";
+our $VERSION = "0.06";
 
 Construct Tk::Widget 'HyperText';
-
-# Base64 encodings of the default "missing/broken image" images.
-our $IMG_BROKEN = q~iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABGdBTUEAAK/INwWK6QAAABl0RVh0
-U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAKTSURBVHjaYmxpafnPMEAgPT2dASCAWECM
-6upqxoFwwJs3b/4DBBATwwADgAAacAcABNCAOwAggAbcAQABNOAOAAigAXcAQAANuAMAAmjAHQAQ
-QAPuAIAAItoBjIyM04D4PxKeBhVPBuIzyOJAzEesuQABxESk5S4uoqKZ/6urGf63tjL89/ZmUGJh
-yQSKBwGlM8/U1hr/Ly5m+C8oyJAK5DNAMFEAIIAYQJUREDAQwkAwrYON7f9/Tc3//5WV/+8WEAAJ
-7i53c/v/v7T0/xsGhv8xQAwUOwPEfMSY+fr16/8AAUSKA+SB+O4hoCXAcP7/X1b2f7mu7v//RUX/
-/7Ow/I8GigtCHJBMjHkwBwAEENFpAKjhIZCaXosQYOjg5GRgWLWKYfKfPwwngELvgfJAdXNJSYQA
-AURSLgAa3nOQgWH1ahkZBgY2NgaGW7cYnj95wvAaFDRg+xk6Sc0FAAFEkgOAiQ4UDcbGJiYMDOzs
-DD8+fGBgBgrYAbE4AwMwBhhcSHUAQACRWg6Ud7i4KClxcTE8uX6dYRdQ4C0Q6wPxVIh8JilZEAQA
-AoiUciBZSUgos9zIiIFh+XKGFqBYPhCD4p4ViJ2BOA0YOkCqgxQHAAQQseUAyFeZq8zNGRjmzmUo
-+vePYQ9Q4AEw0YF8fhaILwOxJxDzQkIhiFgHAAQQC5HqMssZGY0/b9/OEAvk3IEkunugRAe0nBno
-iDRQWvgAxI5AvAlSEK0jxmCAACKqHAAVLKCCiAGSz/9D7GcogcoZAPFMJLndQBxEbDkAEEAsRGa/
-T0AqC4rR5S6AWthQTDIACKABrw0BAmjAHQAQQAPuAIAAGnAHAATQgDsAIIAG3AEAATTgDgAIIEZw
-q2QAAUCAAQBj+lYRrQ+vagAAAABJRU5ErkJggg==~;
-our $IMG_INVALID = q~iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABGdBTUEAAK/INwWK6QAAABl0RVh0
-U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAGvSURBVHjaYmxpafnPMEAgPT2dASCAWECM
-6upqxoFwwJs3b/4DBBATwwADgAAacAcABNCAOwAggAbcAQABNOAOAAigAXcAQAANuAMAAmjAHQAQ
-QAPuAIAAIssBjIyM8kA8DYj/Q/E0ch0AEEDkhkBmR4d75v//PQz//1sxBAQwZAIdEUqOQQABREEU
-PAfiYwzXrx9jePSIfFMAAogCB7wD4lMMu3czMHz4QL4pAAHEQqa+e/fufQdSzAxfvzIwPH0KFttD
-jkEAAUSuA96/f/8DSH1j+PKFgeHnTwZgWvj/nhyDAAKIiXwH/AbW5//BIQDikxsFAAFErgNO7dnz
-a/rcuSIMz56B+dPJdQBAAJEbBZnl5fqZLi7yDFZWmxju3GGoAmbD/cBoIDkdAAQQuSEgKCj4gcHY
-+Ao4Dfz7BxEjxyCAAGIhuxR4/pChuZmBYf9+Boa3b8nPhgABRK4Dpk+cyMAHigoYHxj8q8kxCCCA
-yHIA0LKHQCoLiikCAAE04LUhQAANuAMAAmjAHQAQQAPuAIAAGnAHAATQgDsAIIAG3AEAAcT4+vXr
-/wPpAIAAAwBlDWwDA3CdBwAAAABJRU5ErkJggg==~;
 
 sub Populate {
 	my ($cw,$args) = @_;
 
-	# Strip out the arguments we want before passing them to ROText.
+	# Strip out the custom arguments for this widget.
 	my $opts = {
-		# -autorender => re-render the entire HTML document on update
-		#                (otherwise, only render incoming HTML)
-		rerender   => delete $args->{'-rerender'} || 1,
-		# -linkcommand => a callback when a user clicks a link
-		linkcommand => delete $args->{'-linkcommand'} || sub {},
-		# -titlecommand => a callback when a page sets its title
-		titlecommand => delete $args->{'-titlecommand'} || sub {},
-		# -basehref => the "root" of the webpage
-		basehref => delete $args->{'-basehref'} || '.',
-		# -attributes => define default attributes for each tag
-		attributes => {
-			body => {
-				bgcolor   => '#FFFFFF',
-				text      => '#000000',
-				link      => '#0000FF',
-				vlink     => '#990099',
-				alink     => '#FF0000',
+		-attributes => {
+			-anchor => {
+				-normal  => '#0000FF',
+				-hover   => '#FF0000',
+				-active  => '#FF0000',
+				-visited => '#990099',
 			},
-			font => {
-				family    => 'Times New Roman',
-				size      => 3,  # HTML size; not point size.
-				color     => '', # inherit from body
-				back      => '', # inherit from body
+			-font => {
+				-family => 'Times',
+				-mono   => 'Courier',
+				-size   => 'medium',
+				-bold   => 0, # Bold
+				-italic => 0, # Italic
+				-under  => 0, # Underline
+				-over   => 0, # Overstrike
+			},
+			-style => {
+				-margins => 0,
+				-color   => '#000000', # Text color
+				-back    => '#FFFFFF', # Text back
 			},
 		},
+		-continuous => 0,
+		-allow      => [],
+		-deny       => [],
 	};
 
 	# Copy attributes over.
@@ -74,765 +57,911 @@ sub Populate {
 		my $attr = delete $args->{'-attributes'};
 		foreach my $tag (keys %{$attr}) {
 			foreach my $name (keys %{$attr->{$tag}}) {
-				$opts->{attributes}->{$tag}->{$name} = $attr->{$tag}->{$name};
+				$opts->{'-attributes'}->{$tag}->{$name} =
+					$attr->{$tag}->{$name};
 			}
 		}
 	}
 
-	# Pass the remaining arguments to our ROText parent.
-	$args->{'-foreground'} = $opts->{attributes}->{body}->{text};
-	$args->{'-background'} = $opts->{attributes}->{body}->{bgcolor};
+	# Copy other options over.
+	$opts->{'-continuous'} = delete $args->{'-continuous'} || delete $args->{'-continue'};
+	$opts->{'-allow'} = delete $args->{'-allow'} || [];
+	$opts->{'-deny'} = delete $args->{'-deny'} || [];
+
+	# Pass the remaining arguments to ROText.
+	$args->{'-foreground'} = $opts->{'-attributes'}->{'-style'}->{'-color'};
+	$args->{'-background'} = $opts->{'-attributes'}->{'-style'}->{'-back'};
 	$cw->SUPER::Populate($args);
 
 	# Reconfigure the ROText widget with our attributes.
 	$cw->SUPER::configure (
 		-highlightthickness => 0,
-		-font       => [
-			-family => $opts->{attributes}->{font}->{family},
-			-size   => $cw->_size ($opts->{attributes}->{font}->{size}),
+		-exportselection    => 1,
+		-insertofftime      => 1000,
+		-insertontime       => 0,
+		-cursor             => undef,
+		-font => [
+			-family => $opts->{'-attributes'}->{'-font'}->{'-family'},
+			-size   => $cw->_size ($opts->{'-attributes'}->{'-font'}->{'-size'}),
 		],
 	);
 
 	$cw->{hypertext} = {
-		html       => '', # holds HTML code
-		rerender   => $opts->{rerender},
-		attributes => $opts->{attributes},
-		linkcommand => $opts->{linkcommand},
-		titlecommand => $opts->{titlecommand},
-		basehref     => $opts->{basehref},
-		history      => {}, # a history of visited links
-		permissions  => 'allow_all',
-		allow        => {},
-		deny         => {},
+		html        => '', # Holds the HTML code
+		continue    => $opts->{'-continuous'},
+		attrib      => $opts->{'-attributes'},
+		history     => {},
+		events      => {},
+		permissions => 'allow_all',
+		allow       => {},
+		deny        => {},
 	};
 
+	if (scalar @{$opts->{'-allow'}}) {
+		$cw->allowedTags (@{$opts->{'-allow'}});
+	}
+	if (scalar @{$opts->{'-deny'}}) {
+		$cw->deniedTags (@{$opts->{'-deny'}});
+	}
 }
 
-sub insert {
+sub setHandler {
+	my ($cw,%handlers) = @_;
+
+	foreach my $event (keys %handlers) {
+		my $code = $handlers{$event};
+		$cw->{hypertext}->{events}->{$event} = $code;
+	}
+}
+
+sub _event {
+	my ($cw,$event,@args) = @_;
+
+	if (exists $cw->{hypertext}->{events}->{$event}) {
+		return &{$cw->{hypertext}->{events}->{$event}} ($cw,@args);
+	}
+
+	return undef;
+}
+
+sub loadString {
 	my $cw = shift;
-	my $pos = shift;
-	$pos = $cw->index ($pos);
 	my $text = shift;
 
-	# TODO: insert will only insert to the "end"
-	$cw->{hypertext}->{html} .= $text;
+	# Clear the widget.
+	$cw->loadBlank();
 
+	# Set the HTML buffer = our string.
+	$cw->{hypertext}->{html} = $text;
+	$cw->{hypertext}->{plain} = $text;
+	$cw->{hypertext}->{plain} =~ s/<(.|\n)+?>//sig;
 
-	# If we're doing re-rendering, render the entire block of HTML at once.
-	if ($cw->{hypertext}->{rerender}) {
-		# Reset the title to blank.
-		&{$cw->{hypertext}->{titlecommand}} ($cw,"");
-
-		# Render the whole entire page.
-		$cw->SUPER::delete ("0.0","end");
-		$cw->render ($cw->{hypertext}->{html});
-	}
-	else {
-		# Just render this text.
-		$cw->render ($text);
-	}
+	# Render the text.
+	$cw->render ($text);
 }
 
-sub delete {
+sub loadBlank {
 	my $cw = shift;
-
-	# TODO: delete just deletes everything
 	$cw->{hypertext}->{html} = '';
-	$cw->SUPER::delete ("0.0","end");
+	$cw->{hypertext}->{plain} = '';
+	$cw->delete ("0.0","end");
 }
 
-sub get {
-	my $cw = shift;
-
-	# TODO: get just gets everything.
-	return $cw->{hypertext}->{html};
+sub allowedTags {
+	my ($cw,@tags) = @_;
+	$cw->{hypertext}->{allow} = {};
+	foreach (@tags) {
+		$_ = lc($_);
+		$cw->{hypertext}->{allow}->{$_} = 1;
+	}
 }
 
-sub clear {
+sub deniedTags {
+	my ($cw,@tags) = @_;
+	$cw->{hypertext}->{deny} = {};
+	foreach (@tags) {
+		$_ = lc($_);
+		$cw->{hypertext}->{deny}->{$_} = 1;
+	}
+}
+
+sub allowHypertext {
 	my $cw = shift;
 
-	# Delete everything.
-	$cw->{hypertext}->{html} = '';
-	$cw->SUPER::delete ("0.0","end");
+	# Allow AIM-style HTML tags.
+	my @allow = qw(html head title body a p br hr
+		img font center sup sub b i u s);
+	$cw->{hypertext}->{allow} = {};
+	$cw->{hypertext}->{deny} = {};
+
+	foreach (@allow) {
+		$cw->{hypertext}->{allow}->{$_} = 1;
+	}
+}
+
+sub allowEverything {
+	my $cw = shift;
+
+	# Allow everything again.
+	$cw->{hypertext}->{allow} = {};
+	$cw->{hypertext}->{deny} = {};
+}
+
+sub getText {
+	my $cw = shift;
+	my $asHTML = shift || 0;
+
+	if ($asHTML) {
+		return $cw->{hypertext}->{html};
+	}
+	return $cw->{hypertext}->{plain};
 }
 
 sub clearHistory {
 	my $cw = shift;
-
-	# Clear the history.
 	$cw->{hypertext}->{history} = {};
-}
-
-sub namesMode {
-	my $cw = shift;
-	my $new = shift || '';
-
-	if (length $new) {
-		$new = 'allow_all' unless $new =~ /^(allow_all|deny_all|allow_some|deny_some)$/i;
-		$cw->{hypertext}->{permissions} = $new;
-	}
-
-	return $cw->{hypertext}->{permissions};
-}
-
-sub namesAllow {
-	my $cw = shift;
-	my @new = @_;
-
-	if (scalar(@new)) {
-		foreach my $name (@new) {
-			$name =~ s/[<>]//ig;
-
-			$name = uc($name);
-			my $name2 = "/" . $name;
-			if (exists $cw->{hypertext}->{deny}->{$name}) {
-				delete $cw->{hypertext}->{deny}->{$name};
-			}
-			$cw->{hypertext}->{allow}->{$name} = 1;
-			if (exists $cw->{hypertext}->{deny}->{$name2}) {
-				delete $cw->{hypertext}->{deny}->{$name2};
-			}
-			$cw->{hypertext}->{allow}->{$name2} = 1;
-		}
-	}
-
-	my @return = sort keys %{$cw->{hypertext}->{allow}};
-	return (@return);
-}
-
-sub namesDeny {
-	my $cw = shift;
-	my @new = @_;
-
-	if (scalar(@new)) {
-		foreach my $name (@new) {
-			$name =~ s/[<>]//ig;
-
-			$name = uc($name);
-			my $name2 = "/" . $name;
-			if (exists $cw->{hypertext}->{allow}->{$name}) {
-				delete $cw->{hypertext}->{allow}->{$name};
-			}
-			$cw->{hypertext}->{deny}->{$name} = 1;
-			if (exists $cw->{hypertext}->{allow}->{$name2}) {
-				delete $cw->{hypertext}->{allow}->{$name2};
-			}
-			$cw->{hypertext}->{deny}->{$name2} = 1;
-		}
-	}
-
-	my @return = sort keys %{$cw->{hypertext}->{deny}};
-	return (@return);
 }
 
 sub render {
 	my ($cw,$html) = @_;
 
-	# Make the HTML tags easier to find.
-	$html =~ s/</%TK::HYPERTEXT::START::TAG%/g;
-	$html =~ s/>/%TK::HYPERTEXT::END::TAG%/g;
-
-	# Split the tags apart.
-	my @parts = split(/%TK::HYPERTEXT/, $html);
-
-	# Make an array of default styles for this render.
-	my %default = (
-		bgcolor => $cw->{hypertext}->{body}->{bgcolor} || '#FFFFFF',
-		text    => $cw->{hypertext}->{body}->{text} || '#000000',
-		link    => $cw->{hypertext}->{body}->{link} || '#0000FF',
-		vlink   => $cw->{hypertext}->{body}->{vlink} || '#990099',
-		alink   => $cw->{hypertext}->{body}->{alink} || '#FF0000',
-		size    => $cw->{hypertext}->{font}->{size} || 3,
-		font    => $cw->{hypertext}->{font}->{family} || 'Times New Roman',
+	# Initialize the style stack.
+	my $mAttr = $cw->{hypertext}->{attrib};
+	my %style = (
+		weight     => 'normal', # or 'bold'
+		slant      => 'roman',  # or 'italic'
+		underline  => 0,        # or 1
+		overstrike => 0,        # or 1
+		family     => $mAttr->{'-font'}->{'-family'},
+		size       => $mAttr->{'-font'}->{'-size'},
+		foreground => '',
+		background => '',
+		justify    => 'left',   # or 'center' or 'right'
+		offset     => 0,        # for <sup> and <sub>
+		lmargin1   => 0,        # for <blockquote>
+		lmargin2   => 0,        # and <ol>
+		rmargin    => 0,        # and <ul>
+		pre        => 0,        # inside <pre> tags
+		linking    => 0,        # inside <a>...</a> tags
+		linktag    => '',       # Current linktag
+		inul       => 0,        # Inside <ul>
+		inol       => 0,        # Inside <ol>
+		ullevel    => 0,
+		ollevel    => 0,
+		intable    => 0,
+		intd       => 0,
 	);
-
-	# Make an array of escape sequences.
 	my @escape = (
 		'&lt;'   => '<',
 		'&gt;'   => '>',
 		'&quot;' => '"',
 		'&apos;' => "'",
 		'&nbsp;' => ' ',
-		'&reg;'  => chr(0x00ae),  # registered trademark
-		'&copy;' => chr(0x00a9),  # copyright sign
+		'&reg;'  => chr(0x00ae),
+		'&copy;' => chr(0x00a9),
+		'&hearts;' => chr(0x2665),
+		'&diams;'  => chr(0x2666),
+		'&spades;' => chr(0x2660),
+		'&clubs;'  => chr(0x2663),
 		'&amp;'  => '&',
 	);
+	my @stackList = ();
+	my $ulLevel = 0;
+	my $olLevel = 0;
+	my @stackOLLevel = ();
+	my @stackULLevel = ();
+	my $ulStyles = {};
+	my $olStyles = {};
+	my %hyperlink = (); # Hyperlink tags
+	my $tabledata = {}; # Table data
+	my $tableid = 0;    # Table ID
+	my $formdata = {};  # Form data
+	my $formname = '';  # Current form name
+	my $curSelect = {      # Selectbox data
+		in   => 0,     # Not in a <select> tag
+		opts => [],    # Options
+		name => '',    # Name
+		size => 1,     # Size
+		multiple => 0, # Multiple
+		state    => 'readonly',
+	};
+	my (@stack) = $cw->_addStack (\%style);
 
-	# Reset the configuration of our ROText widget.
-	$cw->SUPER::configure (
-		-background => $default{bgcolor},
-		-foreground => $default{text},
-		-font       => [
-			-family => $default{font},
-			-size   => $cw->_size ($default{size}),
-		],
-	);
+	# Initialize the Text widget that gets our attention.
+	my $browser = $cw;
 
-	# Make an array of current styles for this render.
-	my %style = (
-		weight     => 'normal', # or 'bold'
-		slant      => 'roman',  # or 'italic'
-		underline  => 0,        # or 1
-		overstrike => 0,        # or 1
-		family     => '',
-		size       => '',
-		foreground => '',
-		background => '',
-		justify    => 'left',   # or 'center' or 'right'
-		offset     => 0,        # changes for <sup> and <sub>
-		lmargin1   => 0,        # for <blockquote>s
-		lmargin2   => 0,        # and <ol>s
-		rmargin    => 0,        # and <ul>s
-		titling    => 0,        # special--for title tags
-		title      => '',       # our page title
-		hyperlink  => 0,        # special--for hyperlinking
-		linktag    => 0,        # for hyperlinking
-		pre        => 0,        # special--for <pre>formatted text
-		inul       => 0,        # in a <ul> section
-		inol       => 0,        # in an <ol> section
-		incss      => 0,        # in a <style> section
-		csscode    => '',       # CSS code
-		norender   => 0,        # Don't render HTML (ie for comment tags)
-	);
+	# Initialize the parser.
+	my $parser = HTML::TokeParser->new (\$html);
+	$parser->xml_mode(1);
+	$parser->strict_names(1);
+	$parser->marked_sections(1);
+	my $foundOneBody = 0;
+	my $end = 0;
+	my $lineWritten = 0; # 1 = a line of text was written
+	while (my $token = $parser->get_token) {
+		my @data = @{$token};
 
-	my $css = {}; # CSS definitions, if we define them.
+		if ($data[0] eq "T") { # Plain Text
+			my $text = $data[1];
+			$text =~ s/([A-Za-z0-9]+)(\n+)([A-Za-z0-9]+)/$1 $3/ig;
 
-	# Stack the styles up.
-	my @stackFont     = ();
-	my @stackColor    = ();
-	my @stackBG       = ();
-	my @stackSize     = ();
-	my @stackAlign    = ();
-	my @stackOffset   = ();
-	my @stackLMargin1 = ();
-	my @stackLMargin2 = ();
-	my @stackRMargin  = ();
-	my @stackBold     = ();
-	my @stackItalic   = ();
-	my @stackUnderline = ();
-	my @stackOverstrike = ();
-	my @stackLinks    = ();
-	my @stackOLLevel  = ();
-	my @stackULLevel  = ();
-	my @stackList     = (); # format... <ol|ul>#<level>
-	my $olLevel       = 0; # ordered list level
-	my $ulLevel       = 0; # unordered list level
-	my $olStyles      = {}; # ordered list styles
-	my $ulStyles      = {}; # unordered list styles
-	# Ex:
-	# $olStyles = {
-	#   1 => { # level 1
-	#      style    => 1, # numbers
-	#      position => 5,
-	#   },
-	#   2 => { # level 2
-	#      style    => 'i', # lowercase roman numerals
-	#      position => 0,
-	#   },
-	# }
+			# Process escape sequences.
+			while ($text =~ /&#x([^;]+?)\;/i) {
+				my $hex = $1;
+				my $qm  = quotemeta("&#x$hex");
+				my $chr = eval "0x$hex;";
+				my $char = chr($chr);
+				$text =~ s/$qm/$char/ig;
+			}
+			while ($text =~ /&#([^;]+?)\;/i) {
+				my $decimal = $1;
+				my $hex = sprintf("%x", $decimal);
+				my $qm  = quotemeta("&#$decimal;");
+				my $chr = eval "0x$hex";
+				my $char = chr($chr);
+				$text =~ s/$qm/$char/ig;
+			}
+			for (my $i = 0; $i < scalar(@escape) - 1; $i += 2) {
+				my $qm = quotemeta($escape[$i]);
+				my $rep = $escape[$i + 1];
+				$text =~ s/$qm/$rep/ig;
+			}
 
-	# Set this to 1 when the first line of actual text has been written.
-	# Blocklevel elements like to know.
-	my $lineWritten = 0;
+			# Unless in <pre>, remove newlines.
+			unless ($style{pre}) {
+				$text =~ s/[\x0d\x0a]//g;
 
-	# Keep an array of hyperlinks.
-	my %hyperlinks = ();
-
-	# Start parsing through the HTML code.
-	my $lastTag;
-	foreach my $sector (@parts) {
-		# Is this a tag we're in?
-		if ($sector =~ /^::START::TAG%/i) {
-			$sector =~ s/^::START::TAG%//; # strip it
-
-			# Find out the name of this tag and its attributes.
-			my ($name,$attr) = split(/\s+/, $sector, 2);
-			$attr = '' unless defined $attr;
-			$name = uc($name);
-
-			next unless defined $name && length $name;
-
-			# See if this is an allowed tag.
-			my $block = 0;
-			for ($cw->{hypertext}->{permissions}) {
-				/allow_all/i and do {
+				# If there's no text, skip this.
+				if ($text =~ /^[\s\t]+$/) {
 					next;
-				};
-				/allow_some/i and do {
-					if (exists $cw->{hypertext}->{allow}->{$name}) {
-						next;
-					}
-					else {
-						$block = 1;
-						next;
-					}
-				};
-				/deny_all/i and do {
-					$block = 1;
-					next;
-				};
-				/deny_some/i and do {
-					if (exists $cw->{hypertext}->{deny}->{$name}) {
-						$block = 1;
-						next;
-					}
-					else {
-						next;
-					}
-				};
+				}
+				$text =~ s/^[\s\t]+/ /g;
+				$text =~ s/[\s\t]+$/ /g;
 			}
 
-			# If we're not allowed to continue, skip this tag.
-			if ($block) {
-				next;
-			}
+			# Generate a tag.
+			my $tag = '';
+			$tag = $cw->_makeTag(\%style,$browser);
 
-			# Handle the various types of tags.
-			if ($name eq "HTML" || $name eq "/HTML") { # <html>, </html>
-				# That was nice of the programmer.
-			}
-			elsif ($name eq "HEAD" || $name eq "/HEAD") { # <head>, </head>
-				# We don't need to do anything with this, either.
-			}
-			elsif ($name eq "TITLE") { # <title>
-				# They're about to tell us the title.
-				$style{titling} = 1;
-			}
-			elsif ($name eq "/TITLE") { # </title>
-				# Stop titling our page.
-				$style{titling} = 0;
+			# Is this a hyperlink?
+			if ($style{linking}) {
+				# Bind this tag to an event.
+				my $href = $hyperlink{$style{linktag}}->{href};
+				my $target = $hyperlink{$style{linktag}}->{target};
 
-				# Call our title-setting callback.
-				&{$cw->{hypertext}->{titlecommand}} ($cw,$style{title});
-			}
-			elsif ($name eq "LINK") { # <link>
-				# We only support the linking to CSS files for "screen"
-				my $media = "screen";
-				my $type = "";
-				my $href = "";
-				if ($attr =~ /media="(.+?)"/i) {
-					$media = $1;
-				}
-				if ($attr =~ /type="(.+?)"/i) {
-					$type = $1;
-				}
-				if ($attr =~ /href="(.+?)"/i) {
-					$href = $1;
-
-					# See if this is a supported link type.
-					if ($media =~ /^(screen|all)$/i && $type =~ /^text\/(css|stylesheet)$/i) {
-						# See if the file exists.
-						if (-f "$cw->{hypertext}->{basehref}/$href") {
-							# Read this CSS file.
-							open (READ, "$cw->{hypertext}->{basehref}/$href");
-							my @code = <READ>;
-							close (READ);
-							chomp @code;
-
-							# Parse it.
-							$css = $cw->parseCSS(join ("\n",@code));
-						}
-					}
-				}
-			}
-			elsif ($name eq "STYLE") { # <style>
-				# Start reading the style sheet.
-				$style{incss} = 1;
-			}
-			elsif ($name eq "/STYLE") { # </style>
-				# Stop reading the CSS, now parse it.
-				$style{incss} = 0;
-
-				$css = $cw->parseCSS(delete $style{csscode});
-			}
-			elsif ($name eq "BODY") { # <body>
-				# Collect as much data as we can.
-				next unless defined $attr;
-				if ($attr =~ /bgcolor="(.+?)"/i) {
-					$cw->SUPER::configure (-background => $1);
-					$default{bgcolor} = $1;
-				}
-				if ($attr =~ /link="(.+?)"/i) {
-					$default{link} = $1;
-				}
-				if ($attr =~ /vlink="(.+?)"/i) {
-					$default{vlink} = $1;
-				}
-				if ($attr =~ /alink="(.+?)"/i) {
-					$default{alink} = $1;
-				}
-				if ($attr =~ /text="(.+?)"/i) {
-					$cw->SUPER::configure (-foreground => $1);
-					$default{text} = $1;
-				}
-			}
-			elsif ($name eq "/BODY") { # </body>
-				# Technically we shouldn't allow anymore HTML at this point,
-				# on account of the </body>, but let's not be too picky.
-			}
-			elsif ($name eq "BASEFONT") { # <basefont>
-				# Collect as much data as we can.
-				if ($attr =~ /face="(.+?)"/i) {
-					$default{font} = $1;
-				}
-				if ($attr =~ /size="(.+?)"/i) {
-					$default{size} = $1;
-				}
-				if ($attr =~ /color="(.+?)"/i) {
-					$default{text} = $1;
-				}
-			}
-			elsif ($name eq "BASE") { # <base>
-				if ($attr =~ /href="(.+?)"/i) {
-					$cw->{hypertext}->{basehref} = $1;
-				}
-			}
-			elsif ($name eq "FONT") { # <font>
-				# Collect info.
-				if ($attr =~ /face="(.+?)"/i) {
-					push (@stackFont,$1);
-					$style{family} = $1;
+				# Style up the initial color and underline.
+				if (exists $cw->{hypertext}->{history}->{$href}) {
+					$style{foreground} = $mAttr->{'-anchor'}->{'-visited'};
 				}
 				else {
-					push (@stackFont,$stackFont[-1] || '');
+					$style{foreground} = $mAttr->{'-anchor'}->{'-normal'};
 				}
-				if ($attr =~ /color="(.+?)"/i) {
-					push (@stackColor,$1);
-					$style{foreground} = $1;
-				}
-				else {
-					push (@stackColor,$stackColor[-1] || '');
-				}
-				if ($attr =~ /back="(.+?)"/i) {
-					push (@stackBG,$1);
-					$style{background} = $1;
-				}
-				else {
-					push (@stackBG,$stackBG[-1] || '');
-				}
-				if ($attr =~ /size="(.+?)"/i) {
-					push (@stackSize,$1);
-					$style{size} = $1;
-				}
-				else {
-					push (@stackSize,$stackSize[-1] || '');
-				}
+				$style{underline} = 1;
+				push (@stack, $cw->_addStack(\%style));
+				$tag = $cw->_makeTag(\%style,$browser);
 
-				# Copy the other stacks, too.
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name eq "/FONT") { # </font>
-				# Revert to the previous font stack.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				$style{family} = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size} = $stackSize[-1] || '';
+				my $codeClick = sub {
+					my ($parent,$tag,$href,$target) = @_;
 
-				# Roll back the other stacks.
-				pop(@stackAlign);
-				pop(@stackOffset);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name eq "A") { # <a>
-				# Make sure this link has an href.
-				if ($attr =~ /href="(.+?)"/i) {
-					my $href = $1;
+					# Add this link to the history.
+					$parent->{hypertext}->{history}->{$href} = 1;
 
-					# Find the target.
-					my $target = "_self";
-					if ($attr =~ /target="(.+?)"/i) {
-						$target = $1;
-					}
+					# Recolor this link.
+					$parent->SUPER::tagConfigure ($tag,
+						-foreground => $mAttr->{'-anchor'}->{'-active'},
+					);
 
-					# Create a unique hyperlink tag.
-					my $linktag = join ("-",$target,$href);
-
-					# Store this tag.
-					$hyperlinks{$linktag} = {
+					# Call the link command.
+					$cw->_event ('Resource',
+						tag    => 'a',
+						src    => $href,
 						href   => $href,
 						target => $target,
-					};
+					);
+				};
+				my $codeHover = sub {
+					my ($parent,$tag) = @_;
+					$parent->SUPER::configure (
+						-cursor => 'hand2',
+					);
+					$parent->SUPER::tagConfigure ($tag,
+						-foreground => $mAttr->{'-anchor'}->{'-active'},
+					);
+				};
+				my $codeOut = sub {
+					my ($parent,$tag,$href) = @_;
+					$parent->SUPER::configure (
+						-cursor => undef,
+					);
 
-					# Tell the tagger we're linking.
-					$style{hyperlink} = 1;
-					$style{linktag} = $linktag;
+					if (exists $parent->{hypertext}->{history}->{$href}) {
+						$parent->SUPER::tagConfigure ($tag,
+							-foreground => $mAttr->{'-anchor'}->{'-visited'},
+						);
+					}
+					else {
+						$parent->SUPER::tagConfigure ($tag,
+							-foreground => $mAttr->{'-anchor'}->{'-normal'},
+						);
+					}
+				};
+
+				# Bind the clicking of the link.
+				$browser->tagBind ($tag,"<Button-1>", [ $codeClick,
+				$tag, $href, $target ]);
+
+				# Set up the hand cursor.
+				$browser->tagBind ($tag,"<Any-Enter>", [ $codeHover,
+				$tag ]);
+				$browser->tagBind ($tag,"<Any-Leave>", [ $codeOut,
+				$tag, $href ]);
+			}
+
+			# Insert the plain text.
+			if (length $text > 0) {
+				$browser->insert ('end', $text, $tag);
+				$lineWritten = 1;
+			}
+
+			if ($style{linking}) {
+				# Rollback the link styles.
+				%style = $cw->_rollbackStack(\@stack,
+					qw(foreground underline));
+			}
+		}
+		elsif ($data[0] eq "S") { # Start Tag
+			# Skip blocked tags.
+			next if $cw->_blockedTag ($data[1]);
+
+			my $tag = lc($data[1]);
+			my $format = $cw->_makeTag(\%style);
+			if ($tag =~ /^(html|head)$/) { # HTML, HEAD
+				# That was nice of them.
+			}
+			elsif ($tag eq "title") { # Title
+				my $title = $parser->get_text("title", "/title");
+				$cw->_event ('Title',$title);
+			}
+			elsif ($tag eq "body") { # Body
+				my $at = $data[2];
+
+				my ($bg,$fg,$link,$alink,$vlink);
+				if (exists $at->{bgcolor}) {
+					$bg = $at->{bgcolor};
 				}
-			}
-			elsif ($name eq "/A") {
-				# We're not linking anymore.
-				$style{hyperlink} = 0;
-				$style{linktag} = '';
-			}
-			elsif ($name eq "BLOCKQUOTE") { # <blockquote>
-				$cw->SUPER::insert ('end',"\x0a\x0a") if $lineWritten;
-				$style{lmargin1} += 25;
-				$style{lmargin2} += 25;
-				$style{rmargin} += 25;
+				if (exists $at->{text}) {
+					$fg = $at->{text};
+				}
+				if (exists $at->{link}) {
+					$link = $at->{link};
+					$mAttr->{'-anchor'}->{'-normal'} = $link;
+				}
+				if (exists $at->{vlink}) {
+					$vlink = $at->{vlink};
+					$mAttr->{'-anchor'}->{'-visited'} = $vlink;
+				}
+				if (exists $at->{alink}) {
+					$alink = $at->{alink};
+					$mAttr->{'-anchor'}->{'-active'} = $alink;
+				}
 
-				push (@stackLMargin1,$style{lmargin1});
-				push (@stackLMargin2,$style{lmargin2});
-				push (@stackRMargin,$style{rmargin});
+				if ($foundOneBody == 0) {
+					# This is the first <body> tag found;
+					# apply its colors globally.
+					$bg = $mAttr->{'-style'}->{'-back'}
+						unless length $bg;
+					$fg = $mAttr->{'-style'}->{'-color'}
+						unless length $fg;
+					$browser->configure (
+						-background => $bg,
+						-foreground => $fg,
+					);
 
-				# Copy all the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name eq "/BLOCKQUOTE") { # </blockquote>
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				$style{lmargin1} = $stackLMargin1[-1] || 0;
-				$style{lmargin2} = $stackLMargin2[-1] || 0;
-				$style{rmargin} = $stackRMargin[-1] || 0;
-				$cw->SUPER::insert ('end',"\x0a\x0a");
-				$lineWritten = 0;
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackAlign);
-				pop(@stackOffset);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-			}
-			elsif ($name eq "DIV") { # <div>
-				$cw->SUPER::insert ('end',"\x0a") if $lineWritten;
-				if ($attr =~ /align="(.+?)"/i) {
-					my $align = $1;
-					$align = 'left' unless $align =~ /^(left|center|right)$/i;
-					$align = lc($align);
-					push (@stackAlign,$align);
-					$style{justify} = $align;
+					$mAttr->{'-style'}->{'-back'} = $bg;
+					$mAttr->{'-style'}->{'-color'} = $fg;
+					$foundOneBody = 1;
 				}
 				else {
-					push (@stackAlign,$stackAlign[-1] || 'left');
+					# The bg/fg colors only apply from here
+					# on out.
+					$style{background} = $bg;
+					$style{foreground} = $fg;
+					push (@stack, $cw->_addStack(\%style));
 				}
+			}
+			elsif ($tag eq "a") { # Hyperlink
+				my $at = $data[2];
+				my $href = $at->{href} || '';
+				my $target = $at->{target} || '';
 
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				#push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name eq "/DIV") { # </div>
-				pop(@stackAlign);
-				$style{justify} = $stackAlign[-1] || 'left';
-				$cw->SUPER::insert ('end',"\x0a");
+				# Create a unique link tag for Tk::Text.
+				my $linktag = join("-",$href,$target);
+				$linktag .= '_' while exists $hyperlink{$linktag};
+				$hyperlink{$linktag} = {
+					href => $href, target => $target,
+				};
 
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				#pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
+				$style{linking} = 1;
+				$style{linktag} = $linktag;
 			}
-			elsif ($name eq "SPAN") { # <span>
-				# We'll deal with this when we implement... *gasp* StyleSheets!
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name eq "/SPAN") {
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name eq "P") { # <p>
-				$cw->SUPER::insert ('end',"\x0a\x0a") if $lineWritten;
-			}
-			elsif ($name eq "/P") { # </p>
-				$cw->SUPER::insert ('end',"\x0a\x0a");
+			elsif ($tag eq "br") { # Line break
+				$browser->SUPER::insert ('end', "\n", $format);
 				$lineWritten = 0;
 			}
-			elsif ($name eq "BR") { # <br>
-				$cw->SUPER::insert ('end',"\x0a");
+			elsif ($tag eq 'p') { # Paragraph
+				$browser->insert ('end', "\n\n", $format);
+				$lineWritten = 0;
 			}
-			elsif ($name eq "PRE") { # <pre>
-				$cw->SUPER::insert ('end',"\x0a") if $lineWritten;
-				push (@stackFont,"Courier New");
-				$style{family} = "Courier New";
-				$style{pre} = 1;
+			elsif ($tag eq 'form') { # Form
+				my $at = $data[2];
+				my $name = defined $at->{name} ? $at->{name} : 'untitledform';
+				my $action = defined $at->{action} ? $at->{action} : '';
+				my $method = defined $at->{method} ? $at->{method} : '';
+				my $enc    = defined $at->{enctype} ? $at->{enctype} : '';
 
-				# Copy the other stacks.
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
+				# Start collecting the form data.
+				$formdata->{$name}->{form} = {
+					name => $name, action => $action, method => $method, enctype => $enc,
+				};
+				$formname = $name;
 			}
-			elsif ($name eq "/PRE") { # </pre>
-				pop(@stackFont);
-				$style{family} = $stackFont[-1] || '';
-				$style{pre} = 0;
-				$cw->SUPER::insert ('end',"\x0a");
+			elsif ($tag eq 'textarea') { # Textarea
+				my $at = $data[2];
+				my $name = defined $at->{name} ? $at->{name} : 'x_not_a_form_field';
+				my $cols = defined $at->{cols} ? $at->{cols} : 20;
+				my $rows = defined $at->{rows} ? $at->{rows} : 4;
+				my $state = defined $at->{disabled} ? 'disabled' : 'normal';
+				my $wrap = 'word';
+				if (defined $at->{wrap}) {
+					if ($at->{wrap} eq 'off') {
+						$wrap = 'none';
+					}
+				}
 
-				# Roll back the other stacks.
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
+				my $value = $parser->get_text("textarea", "/textarea");
+
+				$formdata->{$formname}->{fields}->{$name} = $value;
+				$formdata->{$formname}->{defaults}->{$name} = $value;
+
+				my $widget = $browser->Text (
+					#-scrollbars => 'ose',
+					-wrap       => $wrap,
+					-width      => $cols,
+					-height     => $rows,
+					-font       => [
+						-family => 'Courier',
+						-size   => 12,
+					],
+					-foreground => '#000000',
+					-background => '#FFFFFF',
+					-highlightthickness => 0,
+					-border             => 1,
+				);
+				$widget->insert('end',$value);
+				$browser->windowCreate('end',
+					-window => $widget,
+					-align  => 'baseline',
+				);
 			}
-			elsif ($name eq "OL") { # <ol>
+			elsif ($tag eq 'select') { # Selectbox
+				my $at = $data[2];
+				my $name = defined $at->{name} ? $at->{name} : 'x_not_a_form_field';
+				my $size = defined $at->{size} ? $at->{size} : 1;
+				my $mult = defined $at->{multiple} ? 1 : 0;
+				my $state = defined $at->{disabled} ? 'disabled' : 'readonly';
+				$curSelect->{in}   = 1;
+				$curSelect->{opts} = [];
+				$curSelect->{name} = $name;
+				$curSelect->{size} = $size;
+				$curSelect->{multiple} = $mult;
+				$curSelect->{state} = $state;
+			}
+			elsif ($tag eq 'option') { # Option
+				my $at = $data[2];
+				my $name  = $curSelect->{name};
+				my $value = defined $at->{value} ? $at->{value} : '';
+				my $label = $parser->get_text("option","/option");
+
+				# Selected?
+				if (exists $at->{selected} || !exists $formdata->{$formname}->{fields}->{$name}) {
+					$formdata->{$formname}->{fields}->{$name} = $label;
+					$formdata->{$formname}->{defaults}->{$name} = $value;
+				}
+
+				if ($curSelect->{in}) {
+					push (@{$curSelect->{opts}}, [ $value, $label ]);
+				}
+			}
+			elsif ($tag eq 'input') { # Input
+				my $at = $data[2];
+				my $name = defined $at->{name} ? $at->{name} : 'x_not_a_form_field';
+
+				my $type = defined $at->{type} ? $at->{type} : 'text';
+				my $size = defined $at->{size} ? $at->{size} : 15;
+				my $value = defined $at->{value} ? $at->{value} : '';
+				my $max   = defined $at->{maxlength} ? $at->{maxlength} : 0;
+				my $state = defined $at->{disabled} ? 'disabled' : 'normal';
+				my $checked = defined $at->{checked} ? 'checked' : 'cleared';
+
+				$type = lc($type);
+				$type = 'text' unless $type =~ /^(text|password|button|checkbox|radio|submit|reset)$/i;
+
+				# Initialize the form variable.
+				$formdata->{$formname}->{fields}->{$name} = $value unless exists $formdata->{$formname}->{fields}->{$name};
+				$formdata->{$formname}->{defaults}->{$name} = $value unless exists $formdata->{$formname}->{defaults}->{$name};
+
+				# Insert the widgets.
+				if ($type eq 'text') {
+					my $widget = $browser->Entry (
+						-textvariable => \$formdata->{$formname}->{fields}->{$name},
+						-width        => $size,
+						-state        => $state,
+						-background   => '#FFFFFF',
+						-foreground   => '#000000',
+						-font         => [
+							-family => 'Helvetica',
+							-size   => 10,
+						],
+						-highlightthickness => 0,
+						-border             => 1,
+					);
+					$browser->windowCreate ('end',
+						-window => $widget,
+						-align  => 'baseline',
+					);
+				}
+				if ($type eq 'password') {
+					my $widget = $browser->Entry (
+						-textvariable => \$formdata->{$formname}->{fields}->{$name},
+						-show         => '*',
+						-state        => $state,
+						-width        => $size,
+						-background   => '#FFFFFF',
+						-foreground   => '#000000',
+						-font         => [
+							-family => 'Helvetica',
+							-size   => 10,
+						],
+						-highlightthickness => 0,
+						-border             => 1,
+					);
+					$browser->windowCreate ('end',
+						-window => $widget,
+						-align  => 'baseline',
+					);
+				}
+				elsif ($type eq 'checkbox') {
+					if ($checked eq 'cleared') {
+						$formdata->{$formname}->{fields}->{$name} = '';
+					}
+
+					my $widget = $browser->Checkbutton (
+						-variable => \$formdata->{$formname}->{fields}->{$name},
+						-state    => $state,
+						-onvalue  => $formdata->{$formname}->{defaults}->{$name},
+						-offvalue => '',
+						-text     => '',
+						-background         => $style{background} || $mAttr->{'-style'}->{'-back'},
+						-activebackground   => $style{background} || $mAttr->{'-style'}->{'-back'},
+						-highlightthickness => 0,
+					);
+					$browser->windowCreate ('end',
+						-window => $widget,
+						-align  => 'baseline',
+					);
+				}
+				elsif ($type eq 'radio') {
+					if ($checked eq 'checked') {
+						$formdata->{$formname}->{fields}->{$name} = $value;
+					}
+
+					my $widget = $browser->Radiobutton (
+						-variable => \$formdata->{$formname}->{fields}->{$name},
+						-state    => $state,
+						-value    => $value,
+						-text     => '',
+						-background         => $style{background} || $mAttr->{'-style'}->{'-back'},
+						-activebackground   => $style{background} || $mAttr->{'-style'}->{'-back'},
+						-highlightthickness => 0,
+					);
+					$browser->windowCreate ('end',
+						-window => $widget,
+						-align  => 'baseline',
+					);
+				}
+				elsif ($type =~ /^(button|submit|reset)$/i) {
+					my $widget = $browser->Button (
+						-text               => $value,
+						-state              => $state,
+						-cursor             => '',
+						-highlightthickness => 0,
+						-border             => 1,
+						-font               => [
+							-family => 'Helvetica',
+							-size   => 10,
+						],
+					);
+					$browser->windowCreate ('end',
+						-window => $widget,
+						-align  => 'baseline',
+					);
+
+					# Submit buttons submit the form.
+					if ($type eq 'submit') {
+						$widget->configure (-command => sub {
+							# Collect all the fields.
+							my $fields = ();
+							foreach my $f (keys %{$formdata->{$formname}->{fields}}) {
+								next if $f eq 'x_not_a_form_field';
+								$fields->{$f} = $formdata->{$formname}->{fields}->{$f};
+							}
+
+							# If there are any listboxes, get them too.
+							if (exists $formdata->{$formname}->{listwidget}) {
+								foreach my $w (keys %{$formdata->{$formname}->{listwidget}}) {
+									my @in = $formdata->{$formname}->{listwidget}->{$w}->curselection();
+									if (scalar(@in) > 1) {
+										my $values = [];
+										foreach my $i (@in) {
+											my $v = $formdata->{$formname}->{listwidget}->{$w}->get ($i);
+											push (@{$values}, $v);
+										}
+										$fields->{$w} = $values;
+									}
+									elsif (scalar(@in) == 1) {
+										$fields->{$w} = $formdata->{$formname}->{listwidget}->{$w}->get ($in[0]);
+									}
+									else {
+										$fields->{$w} = undef;
+									}
+								}
+							}
+				
+							# Submit the form.				
+							$cw->_event ('Submit',
+								form    => $formdata->{$formname}->{form}->{name},
+								action  => $formdata->{$formname}->{form}->{action},
+								method  => $formdata->{$formname}->{form}->{method},
+								enctype => $formdata->{$formname}->{form}->{enctype},
+								fields  => $fields,
+							);
+						});
+					}
+
+					# Reset buttons reset the form.
+					if ($type eq 'reset') {
+						$widget->configure (-command => sub {
+							# Reset all the fields.
+							foreach my $f (keys %{$formdata->{$formname}->{defaults}}) {
+								$formdata->{$formname}->{fields}->{$f} = $formdata->{$formname}->{defaults}->{$f};
+							}
+						});
+					}
+				}
+			}
+			elsif ($tag eq 'table') { # Table
+				$browser->insert ('end', "\n") if $lineWritten;
+				my $at = $data[2];
+				my $border = $at->{border} || 0;
+				my $cellspacing = $at->{cellspacing} || 0;
+				my $cellpadding = $at->{cellpadding} || 0;
+				$tableid++;
+				$tabledata->{$tableid}->{widget} =
+					$cw->Frame (
+						-takefocus          => 0,
+						-highlightthickness => 0,
+						-relief             => 'raised',
+						-borderwidth        => $cw->_isNumber ($border,0),
+						-background         => $style{background} || $mAttr->{'-style'}->{'-back'},
+					);
+				$tabledata->{$tableid}->{row} = -1;
+				$tabledata->{$tableid}->{col} = -1;
+				$tabledata->{$tableid}->{border} = $cw->_isNumber ($border,0);
+				$tabledata->{$tableid}->{cellspacing} = $cw->_isNumber ($cellspacing,0);
+				$tabledata->{$tableid}->{cellpadding} = $cw->_isNumber ($cellpadding,0);
+				$browser->windowCreate ('end',
+					-window => $tabledata->{$tableid}->{widget},
+					-align  => 'baseline',
+				);
+				$style{intable} = 1;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq "tr") { # Table Row
+				if ($style{intable}) {
+					$tabledata->{$tableid}->{col} = -1;
+					$tabledata->{$tableid}->{row}++;
+				}
+			}
+			elsif ($tag =~ /^(td|th|thead|tbody|tfoot)$/) { # Table Data
+				if ($style{intable}) {
+					my $at = $data[2];
+					my $colspan = undef;
+					my $rowspan = undef;
+					if (defined $at->{colspan}) {
+						$colspan = $at->{colspan};
+					} if (defined $at->{rowspan}) {
+						$rowspan = $at->{rowspan};
+					}
+					$style{intd} = 1;
+					$tabledata->{$tableid}->{col}++;
+					$browser = $tabledata->{$tableid}->{widget}->ROText (
+						-exportselection => 1,
+						-takefocus       => 0,
+						-highlightthickness => 0,
+						-relief          => 'sunken',
+						-wrap            => 'word',
+						-borderwidth     => $tabledata->{$tableid}->{border},
+						-insertofftime   => 1000,
+						-insertontime    => 0,
+						-width           => 0,
+						-height          => 2,
+						-padx            => $tabledata->{$tableid}->{cellpadding},
+						-pady            => $tabledata->{$tableid}->{cellpadding},
+						-foreground      => $style{foreground} || $mAttr->{'-style'}->{'-color'},
+						-background      => $style{background} || $mAttr->{'-style'}->{'-back'},
+						-cursor          => undef,
+						-font       => [
+							-family => $style{family},
+							-weight => $style{weight},
+							-slant  => $style{slant},
+							-size   => $cw->_size ($style{size}),
+							-underline => $style{underline},
+							-overstrike => $style{overstrike},
+						],
+					);
+					my @spans = ();
+					push (@spans, '-columnspan' => $colspan) if defined $colspan;
+					push (@spans, '-rowspan' => $rowspan) if defined $rowspan;
+					$browser->grid (
+						-row => $tabledata->{$tableid}->{row},
+						-column => $tabledata->{$tableid}->{col},
+						-sticky => 'nsew',
+						-padx => $tabledata->{$tableid}->{cellspacing},
+						-pady => $tabledata->{$tableid}->{cellspacing},
+						@spans,
+					);
+					$lineWritten = 0;
+				}
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'hr') { # HR
+				my $at = $data[2];
+				my $height = 4;
+				if (exists $at->{size}) {
+					$height = $at->{size};
+				}
+				my $width = $cw->screenwidth;
+				my $frame = $browser->Frame (
+					-relief             => 'raised',
+					-height             => $height,
+					-width              => $width,
+					-borderwidth        => 1,
+					-highlightthickness => 0,
+				);
+				$browser->insert ('end', "\n", $format);
+				$browser->windowCreate ('end',
+					-window => $frame,
+					-padx   => 0,
+					-pady   => 5,
+				);
+				$browser->insert ('end', "\n", $format);
+				$lineWritten = 0;
+			}
+			elsif ($tag eq 'img') { # IMG
+				my $at = $data[2];
+
+				my $format = '';
+				my $align = lc($at->{align}) || '';
+				$align = 'baseline' unless $align =~ /^(top|center|bottom|baseline)$/;
+				if (length $at->{src}) {
+					my ($ext) = $at->{src} =~ /\.([^\.]+)$/i;
+					if ($ext =~ /^gif$/i) {
+						$format = 'GIF';
+					}
+					elsif ($ext =~ /^png$/i) {
+						$format = 'PNG';
+					}
+					elsif ($ext =~ /^(jpeg|jpe|jpg)$/i) {
+						$format = 'JPEG';
+					}
+					elsif ($ext =~ /^bmp$/i) {
+						$format = 'BMP';
+					}
+				}
+
+				my $broken = 0;
+
+				# Request this resource.
+				my $data = $cw->_event ('Resource',
+					tag    => 'img',
+					src    => $at->{src} || '',
+					width  => $at->{width} || '',
+					height => $at->{height} || '',
+					vspace => $at->{vspace} || '',
+					hspace => $at->{hspace} || '',
+					align  => $at->{align} || '',
+					alt    => $at->{alt} || '',
+				);
+				$data = '' unless defined $data;
+
+				# Invalid format?
+				if (length $format == 0 || length $data == 0) {
+					$broken = 1;
+				}
+
+				if (length $data > 0 && not $broken) {
+					my $image = $cw->Photo (
+						-data   => $data,
+						-format => $format,
+					);
+					$browser->imageCreate ('end',
+						-image => $image,
+						-align => $align,
+						-padx  => $cw->_isNumber($at->{hspace},2),
+						-pady  => $cw->_isNumber($at->{vspace},2),
+					);
+				}
+				else {
+					my $image = $cw->Photo (
+						-data   => $cw->_brokenImage(),
+						-format => 'PNG',
+					);
+					$browser->imageCreate ('end',
+						-image => $image,
+						-align => $align,
+						-padx  => $cw->_isNumber($at->{hspace},2),
+						-pady  => $cw->_isNumber($at->{vspace},2),
+					);
+				}
+
+				$lineWritten = 1;
+			}
+			elsif ($tag eq 'font' || $tag eq 'basefont') { # Font
+				my $at = $data[2];
+
+				if (exists $at->{face}) {
+					$style{family} = $at->{face};
+				}
+				if (exists $at->{size}) {
+					$style{size} = $at->{size};
+				}
+				if (exists $at->{color}) {
+					$style{foreground} = $at->{color};
+				}
+				if (exists $at->{back}) {
+					$style{background} = $at->{back};
+				}
+
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^h(1|2|3|4|5|6)$/) { # Heading
+				my $level = $1;
+				my $size = $cw->_heading($level);
+				$browser->insert ('end',"\n\n") if $lineWritten;
+				$style{size} = $size;
+				$style{weight} = 'bold';
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq "ol") { # Ordered List
+				my $at = $data[2];
 				if ($style{inol} == 0 && $style{inul} == 0 && $lineWritten) {
-					$cw->SUPER::insert ('end',"\x0a\x0a");
+					$browser->insert ('end',"\n\n");
 				}
 				elsif ($style{inol} || $style{inul}) {
-					$cw->SUPER::insert ('end',"\x0a");
+					$browser->insert ('end',"\n");
 				}
 				$style{lmargin1} += 15;
 				$style{lmargin2} += 30;
 				$style{inol}++;
 				$olLevel++;
 
-				# Find out any info.
-				my $type  = 1;
+				my $type = 1;
 				my $start = 1;
-				if ($attr =~ /type="(.+?)"/i) {
-					$type = $1;
+				if (defined $at->{type}) {
+					$type = $at->{type};
 				}
-				if ($attr =~ /start="(.+?)"/i) {
-					$start = $1;
+				if (defined $at->{start}) {
+					$start = $at->{start};
 				}
 
 				$olStyles->{$olLevel} = {
@@ -840,32 +969,271 @@ sub render {
 					position => $start,
 				};
 
-				push (@stackList,join("#","ol",$olLevel));
+				push (@stackList,join('#','ol',$olLevel));
 				push (@stackOLLevel,$olLevel);
-				push (@stackLMargin1,$style{lmargin1});
-				push (@stackLMargin2,$style{lmargin2});
 
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-
-				#print "<ol> found: type=$type; start=$start\n";
+				push (@stack, $cw->_addStack(\%style));
 			}
-			elsif ($name eq "/OL") { # </ol>
-				pop(@stackList);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				$style{lmargin1} = $stackLMargin1[-1] || 0;
-				$style{lmargin2} = $stackLMargin2[-1] || 0;
+			elsif ($tag eq "ul") { # Unordered List
+				my $at = $data[2];
+				if ($style{inol} == 0 && $style{inul} == 0 && $lineWritten) {
+					$browser->insert ('end',"\n\n");
+				}
+				elsif ($style{inol} || $style{inul}) {
+					$browser->insert ('end',"\n");
+				}
+				$style{lmargin1} += 15;
+				$style{lmargin2} += 30;
+				$style{inul}++;
+				$ulLevel++;
+
+				# Find out any style info.
+				my $type = "disc";
+				if (defined $at->{type}) {
+					$type = $at->{type};
+				}
+
+				$ulStyles->{$ulLevel} = {
+					type => $type,
+				};
+
+				push (@stackList,join('#','ul',$ulLevel));
+				push (@stackULLevel,$ulLevel);
+
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'li') { # List Item
+				if (scalar(@stackList)) {
+					my ($family,$level) = split(/#/, $stackList[-1], 2);
+					my $kind = '';
+					my $begin = 0;
+					if ($family eq "ol") {
+						$kind = $olStyles->{$level}->{type};
+						$begin = $olStyles->{$level}->{position};
+					}
+					else {
+						$kind = $ulStyles->{$level}->{type};
+						$begin = 0;
+					}
+
+					if ($family eq "ol") {
+						$olStyles->{$level}->{position}++;
+						my $symbol = $cw->_getOLsym ($kind,$begin);
+						$symbol .= ".";
+						$symbol .= " " until length $symbol >= 8;
+						$browser->insert ('end',"$symbol",$format);
+					}
+					else {
+						my $symbol = $cw->_getULsym ($kind);
+						$browser->insert ('end',"$symbol  ",$format);
+					}
+				}
+			}
+			elsif ($tag eq 'blockquote') { # Blockquote
+				$browser->insert ('end',"\n",$format) if $lineWritten;
+				$style{lmargin1} += 25;
+				$style{lmargin2} += 25;
+				$style{rmargin} += 25;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'div') { # Div
+				my $at = $data[2];
+				$browser->insert ('end',"\n",$format) if $lineWritten;
+
+				if (exists $at->{align}) {
+					if ($at->{align} =~ /^(center|left|right)$/i) {
+						$style{justify} = lc($1);
+					}
+				}
+
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'span') { # Span
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'pre') { # Pre
+				$browser->insert('end', "\n", $format) if $lineWritten;
+				$style{family} = $mAttr->{'-font'}->{'-mono'};
+				$style{pre} = 1;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^(code|tt|kbd|samp)$/) { # Code
+				$style{family} = $mAttr->{'-font'}->{'-mono'};
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^(center|right|left)$/) { # Alignment
+				my $align = $1;
+				$browser->insert ('end',"\n",$format);
+				$style{justify} = lc($align);
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'sup') { # Superscript
+				$style{size}--;
+				$style{size} = 0 if $style{size} < 0;
+				$style{offset} += 4;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'sub') { # Subscript
+				$style{size}--;
+				$style{size} = 0 if $style{size} < 0;
+				$style{offset} -= 2;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'big') { # Big
+				$style{size}++;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag eq 'small') { # Small
+				$style{size}--;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^(b|strong)$/) { # Bold
+				$style{weight} = "bold";
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^(i|em|address|var|cite|def)$/) { # Italic
+				$style{slant} = "italic";
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^(u|ins)$/) { # Underline
+				$style{underline} = 1;
+				push (@stack, $cw->_addStack(\%style));
+			}
+			elsif ($tag =~ /^(s|del)$/) { # Strike-out
+				$style{overstrike} = 1;
+				push (@stack, $cw->_addStack(\%style));
+			}
+		}
+		elsif ($data[0] eq "E") { # End Tag
+			# Skip blocked tags.
+			next if $cw->_blockedTag ($data[1]);
+
+			my $tag = lc($data[1]);
+			my $format = $cw->_makeTag(\%style);
+			if ($tag =~ /^(html|head)$/) { # /HTML, /HEAD
+				# That was nice of them.
+			}
+			elsif ($tag eq 'title') { # /Title
+				# Ignore; we already got the title.
+			}
+			elsif ($tag eq 'body') { # /Body
+				$browser->insert('end',"\n",$format);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(foreground background));
+			}
+			elsif ($tag eq 'a') { # /A
+				# We're not linking anymore.
+				$style{linking} = 0;
+				$style{linktag} = '';
+			}
+			elsif ($tag eq 'p') { # /Paragraph
+				$browser->insert('end',"\n\n",$format);
+				$lineWritten = 0;
+			}
+			elsif ($tag eq 'table') { # /Table
+				$browser->insert('end',"\n",$format);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(intable));
+			}
+			elsif ($tag eq "tr") { # /Table Row
+				# Do nothing.
+			}
+			elsif ($tag =~ /^(td|th|thead|tbody|tfoot)$/) { # /Table Data
+				if ($style{intd}) {
+					$style{intd} = 0;
+					my $endline = $browser->index('end');
+					$endline =~ s/\..*$//;
+					my $i = 0;
+					my $max = 0;
+					while ($i++ < $endline) {
+						my $l = length (
+							$browser->get("$i.0","$i.0 lineend")
+						);
+						$max = $l if $l > $max;
+					}
+					$browser->configure (-width => $max,
+						-height => $endline - 1);
+					%style = $cw->_rollbackStack(\@stack,
+						qw(intd));
+
+					# Reset the browser.
+					$browser = $cw;
+				}
+			}
+			elsif ($tag eq 'select') { # /Select
+				if ($curSelect->{in}) {
+					# Collect the choices.
+					my @choices = ();
+					foreach my $choice (@{$curSelect->{opts}}) {
+						push (@choices,$choice->[1] || $choice->[0]);
+					}
+
+					# Determine if we need a Listbox or a BrowseEntry.
+					my $name = $curSelect->{name} || 'x_not_a_form_field';
+					my $size = $curSelect->{size};
+					my $mult = $curSelect->{multiple};
+					$size = 1 unless $cw->_isNumber($size);
+					if ($size <= 1) {
+						# BrowseEntry.
+						my $widget = $browser->BrowseEntry (
+							-variable => \$formdata->{$formname}->{fields}->{$name},
+							-choices  => [ @choices ],
+							-state      => $curSelect->{state},
+							-foreground => '#000000',
+							-background => '#FFFFFF',
+							-disabledforeground => '#000000',
+							-disabledbackground => '#FFFFFF',
+							-border     => 1,
+							-highlightthickness => 0,
+							-font       => [
+								-family => 'Helvetica',
+								-size   => 10,
+							],
+						);
+						$browser->windowCreate ('end',
+							-window => $widget,
+							-align  => 'baseline',
+						);
+					}
+					else {
+						# Listbox.
+						$formdata->{$formname}->{listboxes}->{$name} = 1;
+						$formdata->{$formname}->{listwidget}->{$name} = $browser->Listbox (
+							-height => $size,
+							-foreground => '#000000',
+							-background => '#FFFFFF',
+							-font       => [
+								-family => 'Helvetica',
+								-size   => 10,
+							],
+							-selectmode => ($mult ? 'multiple' : 'single'),
+							-exportselection => 0,
+							-border          => 1,
+							-highlightthickness => 0,
+						);
+						$formdata->{$formname}->{listwidget}->{$name}->insert('end',@choices);
+						$browser->windowCreate ('end',
+							-window => $formdata->{$formname}->{listwidget}->{$name},
+							-align  => 'baseline',
+						);
+					}
+				}
+			}
+			elsif ($tag eq 'font') { # /Font
+				%style = $cw->_rollbackStack(\@stack,
+					qw(family size color back));
+			}
+			elsif ($tag =~ /^h(1|2|3|4|5|6)$/) { # /Heading
+				$browser->insert('end',"\n\n",$format);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(size weight));
+				$lineWritten = 0;
+			}
+			elsif ($tag eq 'ol') { # /Ordered List
+				pop (@stackList);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(lmargin1 lmargin2));
+
 				my $lastLevel = pop(@stackOLLevel);
 				$style{olLevel} = $stackOLLevel[-1] || 0;
 				delete $olStyles->{$lastLevel};
@@ -876,85 +1244,20 @@ sub render {
 				$style{inol} = 0 if $style{inol} < 0;
 
 				if ($style{inol} || $style{inul}) {
-					$cw->SUPER::insert ('end',"\x0a");
+					$browser->insert ('end',"\n",$format);
+					$lineWritten = 0;
 				}
 				else {
-					$cw->SUPER::insert ('end',"\x0a\x0a");
+					$browser->insert ('end',"\n\n",$format);
+					$lineWritten = 0;
 				}
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{rmargin}    = $stackRMargin[-1] || 0;
 			}
-			elsif ($name eq "UL") { # <ul>
-				if ($style{inol} == 0 && $style{inul} == 0 && $lineWritten) {
-					$cw->SUPER::insert ('end',"\x0a\x0a");
-				}
-				elsif ($style{inol} || $style{inul}) {
-					$cw->SUPER::insert ('end',"\x0a");
-				}
-				$style{lmargin1} += 15;
-				$style{lmargin2} += 30;
-				$style{inul}++;
-				$ulLevel++;
+			elsif ($tag eq 'ul') { # /Unordered List
+				pop (@stackList);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(lmargin1 lmargin2));
 
-				# Find out any info.
-				my $type  = "disc";
-				if ($attr =~ /type="(.+?)"/i) {
-					$type = $1;
-				}
-
-				$ulStyles->{$ulLevel} = {
-					type     => $type,
-				};
-
-				push (@stackList,join("#","ul",$ulLevel));
-				push (@stackULLevel,$ulLevel);
-				push (@stackLMargin1,$style{lmargin1});
-				push (@stackLMargin2,$style{lmargin2});
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-
-				#print "<ul> found: type=$type\n";
-			}
-			elsif ($name eq "/UL") { # </ul>
-				pop(@stackList);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				$style{lmargin1} = $stackLMargin1[-1] || 0;
-				$style{lmargin2} = $stackLMargin2[-1] || 0;
-				my $lastLevel = pop(@stackOLLevel);
+				my $lastLevel = pop(@stackULLevel);
 				$style{ulLevel} = $stackULLevel[-1] || 0;
 				delete $ulStyles->{$lastLevel};
 
@@ -964,997 +1267,246 @@ sub render {
 				$style{inul} = 0 if $style{inul} < 0;
 
 				if ($style{inol} || $style{inul}) {
-					$cw->SUPER::insert ('end',"\x0a");
+					$browser->insert ('end',"\n",$format);
+					$lineWritten = 0;
 				}
 				else {
-					$cw->SUPER::insert ('end',"\x0a\x0a");
-				}
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name eq "LI") { # <li>
-				# The code for this must be in-general, as both <ul> and <ol>
-				# need to use this tag.
-				if (scalar(@stackList)) {
-					my ($family,$level) = split(/#/, $stackList[-1], 2);
-					my $kind  = '';
-					my $begin = 0;
-					if ($family eq "ol") {
-						$kind = $olStyles->{$level}->{type};
-						$begin = $olStyles->{$level}->{position};
-					}
-					else {
-						$kind = $ulStyles->{$level}->{type};
-						$begin = $ulStyles->{$level}->{position};
-					}
-
-					#print "<li> found (type=$kind; start=$begin)\n";
-
-					if ($family eq "ol") {
-						$olStyles->{$level}->{position}++;
-						my $symbol = $cw->_getOLsym ($kind,$begin);
-						my $symTag = $cw->_makeTag (\%style,\%default,\%hyperlinks);
-
-						#print "insert: $symbol.\n";
-						$symbol .= ".";
-						$symbol .= " " until length $symbol >= 8;
-						$cw->SUPER::insert ('end',"$symbol",$symTag);
-					}
-					else {
-						my $symbol = $cw->_getULsym ($kind);
-						my $symTag = $cw->_makeTag (\%style,\%default,\%hyperlinks);
-						$cw->SUPER::insert ('end',"$symbol  ",$symTag);
-					}
+					$browser->insert ('end',"\n\n",$format);
+					$lineWritten = 0;
 				}
 			}
-			elsif ($name eq "/LI") { # </li>
-				$cw->SUPER::insert ('end',"\x0a",$lastTag);
-			}
-			elsif ($name =~ /^(CODE|TT|KBD|SAMP)$/) { # <code>, <tt>, <kbd>, <samp>
-				push (@stackFont,"Courier New");
-				$style{family} = "Courier New";
-
-				# Copy the other stacks.
-				#push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(CODE|TT|KBD|SAMP)$/) { # </code>, </tt>, </kbd>, </samp>
-				pop(@stackFont);
-				$style{family} = $stackFont[-1] || '';
-
-				# Roll back the other stacks.
-				#pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name =~ /^(CENTER|RIGHT|LEFT)$/) { # <center>, <right>, <left>
-				my $align = lc($name);
-				$cw->SUPER::insert ('end',"\x0a") if $lineWritten;
-				push (@stackAlign, $align);
-				$style{justify} = $align;
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				#push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(CENTER|RIGHT|LEFT)$/) { # </center>, </right>, </left>
-				pop(@stackAlign);
-				$style{justify} = $stackAlign[-1] || 'left';
-				$cw->SUPER::insert ('end',"\x0a");
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				#pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name =~ /^H(1|2|3|4|5|6|7)$/) { # <h1> - <h7>
-				my $size = $cw->_heading ($1);
-				$cw->SUPER::insert ('end',"\x0a\x0a") if $lineWritten;
-				push (@stackSize, $size);
-				push (@stackBold,"bold");
-				$style{size} = $size;
-				$style{weight} = "bold";
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				#push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				#push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(H(1|2|3|4|5|6|7))$/) { # </h1> - </h7>
-				pop(@stackSize);
-				pop(@stackBold);
-				my $newSize = $stackSize[-1] || '';
-				$style{size} = $newSize;
-				$style{weight} = $stackBold[-1] || 'normal';
-				$cw->SUPER::insert ('end',"\x0a\x0a");
-				$lineWritten = 0;
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				#pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				#pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				#$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name eq "SUP") { # <sup>
-				if (not length $style{size}) {
-					$style{size} = $default{size} - 1;
-				}
-				else {
-					$style{size}--;
-				}
-				$style{size} = 0 if $style{size} < 0;
-				$style{offset} += 4;
-				push (@stackOffset,$style{offset});
-				push (@stackSize,$style{size});
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				#push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				#push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name eq "SUB") { # <sub>
-				if (not length $style{size}) {
-					$style{size} = $default{size} - 1;
-				}
-				else {
-					$style{size}--;
-				}
-				$style{size} = 0 if $style{size} < 0;
-				$style{offset} -= 2;
-				push (@stackOffset,$style{offset});
-				push (@stackSize,$style{size});
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				#push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				#push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(SUP|SUB)$/) { # </sup>, </sub>
-				pop(@stackOffset);
-				pop(@stackSize);
-				$style{size} = $stackSize[-1] || '';
-				$style{offset} = $stackOffset[-1] || 0;
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				#pop(@stackSize);
-				#pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name =~ /^(B|STRONG)$/) { # <b>, <strong>
-				$style{weight} = "bold";
-				push (@stackBold,"bold");
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				#push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(B|STRONG)$/) { # </b>, </strong>
-				pop(@stackBold);
-				$style{weight} = $stackBold[-1] || 'normal';
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				#pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				#$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name =~ /^(I|EM|ADDRESS|VAR|CITE|DEF)$/) { # <i>, <em>, <address>, <var>, <cite>, <def>
-				$style{slant} = "italic";
-				push (@stackItalic,"italic");
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				#push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(I|EM|ADDRESS|VAR|CITE|DEF)$/) { # </i>, </em>, </address>, </var>, </cite>, </def>
-				pop(@stackItalic);
-				$style{slant} = $stackItalic[-1] || 'roman';
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				#pop(@stackItalic);
-				pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				#$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name =~ /^(U|INS)$/) { # <u>, <ins>
-				$style{underline} = 1;
-				push (@stackUnderline,1);
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				#push (@stackUnderline,$stackUnderline[-1] || 0);
-				push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(U|INS)$/) { # </u>, </ins>
-				pop(@stackUnderline);
-				$style{underline} = $stackUnderline[-1] || 0;
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				#pop(@stackUnderline);
-				pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				#$style{underline}  = $stackUnderline[-1] || 0;
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name =~ /^(S|DEL)$/) { # <s>, <del>
-				$style{overstrike} = 1;
-				push (@stackOverstrike,1);
-
-				# Copy the other stacks.
-				push (@stackFont,$stackFont[-1] || '');
-				push (@stackColor,$stackColor[-1] || '');
-				push (@stackBG,$stackBG[-1] || '');
-				push (@stackSize,$stackSize[-1] || '');
-				push (@stackAlign,$stackAlign[-1] || 'left');
-				push (@stackOffset,$stackOffset[-1] || 0);
-				push (@stackLMargin1,$stackLMargin1[-1] || 0);
-				push (@stackLMargin2,$stackLMargin2[-1] || 0);
-				push (@stackRMargin,$stackRMargin[-1] || 0);
-				push (@stackBold,$stackBold[-1] || 'normal');
-				push (@stackItalic,$stackItalic[-1] || 'roman');
-				push (@stackUnderline,$stackUnderline[-1] || 0);
-				#push (@stackOverstrike,$stackOverstrike[-1] || 0);
-			}
-			elsif ($name =~ /^\/(S|DEL)$/) { # </s>, </del>
-				pop(@stackOverstrike);
-				$style{overstrike} = $stackOverstrike[-1] || 0;
-
-				# Roll back the other stacks.
-				pop(@stackFont);
-				pop(@stackColor);
-				pop(@stackBG);
-				pop(@stackSize);
-				pop(@stackOffset);
-				pop(@stackAlign);
-				pop(@stackLMargin1);
-				pop(@stackLMargin2);
-				pop(@stackRMargin);
-				pop(@stackBold);
-				pop(@stackItalic);
-				pop(@stackUnderline);
-				#pop(@stackOverstrike);
-				$style{bold}       = $stackBold[-1] || 'normal';
-				$style{italic}     = $stackItalic[-1] || 'roman';
-				$style{underline}  = $stackUnderline[-1] || 0;
-				#$style{overstrike} = $stackOverstrike[-1] || 0;
-				$style{family}     = $stackFont[-1] || '';
-				$style{foreground} = $stackColor[-1] || '';
-				$style{background} = $stackBG[-1] || '';
-				$style{size}       = $stackSize[-1] || '';
-				$style{offset}     = $stackOffset[-1] || 0;
-				$style{align}      = $stackAlign[-1] || 'left';
-				$style{lmargin1}   = $stackLMargin1[-1] || 0;
-				$style{lmargin2}   = $stackLMargin2[-1] || 0;
-				$style{rmargin}    = $stackRMargin[-1] || 0;
-			}
-			elsif ($name eq "HR") { # <hr>
-				# Collect data from the <hr> tag.
-				my $size = 2;
-				my $width = $cw->SUPER::cget('-width') * 140;
-				if ($attr =~ /size="(.+?)"/i) {
-					$size = $1;
-				}
-				if ($attr =~ /width="(.+?)"/i) {
-					$width = $1;
-				}
-
-				# Create the HR widget.
-				my $hr = $cw->SUPER::Frame (
-					-height      => $size,
-					-width       => $width,
-					-borderwidth => 1,
-					-relief      => 'sunken',
-					-background  => $default{bgcolor},
-				);
-
-				# Insert the widgets.
-				$cw->SUPER::insert ('end',"\x0a") if $lineWritten;
-				$cw->SUPER::window ('create','insert',
-					-window => $hr,
-					-pady   => 0,
-					-padx   => 0,
-				);
-				$cw->SUPER::insert ('end',"\x0a");
+			elsif ($tag eq 'li') { # /LI
+				$browser->insert('end',"\n",$format);
 				$lineWritten = 0;
 			}
-			elsif ($name eq "IMG") { # <img>
-				# Must have a source.
-				my $base = $cw->{hypertext}->{basehref};
-				if ($attr =~ /src="(.+?)"/i) {
-					my $file = $1;
-					my $path = join ("/",$base,$file);
-					$path = "__MISSING__" unless -f $path;
-
-					# Determine the type.
-					my $type = '';
-					if ($file =~ /\.(jpg|jpeg|jpe)$/i) {
-						$type = "JPEG";
-					}
-					elsif ($file =~ /\.gif$/i) {
-						$type = "GIF";
-					}
-					elsif ($file =~ /\.png$/i) {
-						$type = "PNG";
-					}
-					elsif ($file =~ /\.bmp$/i) {
-						$type = "BMP";
-					}
-					else {
-						$type = "__INVALID__";
-					}
-
-					# See if the user defined hspace and vspace.
-					my $hspace = 0;
-					my $vspace = 0;
-
-					if ($attr =~ /hspace="(.+?)"/i) {
-						$hspace = $1;
-					}
-					if ($attr =~ /vspace="(.+?)"/i) {
-						$hspace = $1;
-					}
-
-					# Image alignment is only vertical.
-					my $align = "center";
-					if ($attr =~ /align="(.+?)"/i) {
-						$align = $1;
-					}
-					$align = "baseline" unless $align =~ /^(top|center|bottom|baseline)$/i;
-					$align = lc($align);
-
-					# Create it as a child of the text widget.
-					my $pic = undef;
-					if ($path eq "__MISSING__") {
-						$pic = $cw->SUPER::Photo (
-							-data   => $IMG_BROKEN,
-							-format => 'PNG',
-						);
-					}
-					elsif ($type eq "__INVALID__") {
-						$pic = $cw->SUPER::Photo (
-							-data   => $IMG_INVALID,
-							-format => 'PNG',
-						);
-					}
-					else {
-						$pic = $cw->SUPER::Photo (
-							-file   => $path,
-							-format => $type,
-						);
-					}
-
-					# Insert it.
-					$cw->SUPER::imageCreate ("end",
-						-image => $pic,
-						-align => $align,
-						-padx  => $hspace,
-						-pady  => $vspace,
-					);
-				}
+			elsif ($tag eq 'blockquote') { # /Blockquote
+				$browser->insert('end',"\n",$format);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(lmargin1 lmargin2 rmargin));
+				$lineWritten = 0;
 			}
-
-			# Handle CSS things.
-			my $runCSS = 0;
-			my $class = '';
-			my $id = '';
-			if ($attr =~ /class="(.+?)"/i) {
-				$class = "." . $1;
-				$runCSS = 1;
+			elsif ($tag eq 'div') { # /Div
+				$browser->insert('end',"\n",$format);
+				%style = $cw->_rollbackStack(\@stack,'justify');
+				$lineWritten = 0;
 			}
-			if ($attr =~ /id="(.+?)"/i) {
-				$id = "#" . $1;
-				$runCSS = 1;
+			elsif ($tag eq 'span') { # /Span
+				%style = $cw->_rollbackStack(\@stack);
 			}
-			if (exists $css->{lc($name)} || exists $css->{$name}) {
-				$runCSS = 1;
+			elsif ($tag eq 'pre') { # /Pre
+				$browser->insert ('end',"\n",$format);
+				%style = $cw->_rollbackStack(\@stack,
+					qw(family pre));
 			}
-
-			if ($runCSS) {
-				# Check for styles.
-				my @check = (
-					lc($name),
-					$name,
-					$class,
-					$id,
-				);
-
-				foreach (@check) {
-					###############################
-					# Color Attributes            #
-					###############################
-					# background:            only `color` is supported
-					# background-color:      supported
-					# background-image:      no
-					# background-attachment: no
-					# background-repeat:     no
-					if (exists $css->{$_}->{'background-color'}) {
-						if ($_ =~ /^body$/i) {
-							$cw->SUPER::configure (-background => $css->{$_}->{'background-color'});
-							$default{bgcolor} = $css->{$_}->{'background-color'};
-						}
-						else {
-							$style{background} = $css->{$_}->{'background-color'};
-							(scalar(@stackBG)) ? $stackBG[-1] = $style{background} : push(@stackBG,$style{background});
-						}
-					}
-					if (exists $css->{$_}->{'background'}) { # shorthand for all background-attributes
-						my ($bgcolor) = (split(/\s+/, $css->{$_}->{background}))[0];
-						if ($_ =~ /^body$/i) {
-							$cw->SUPER::configure (-background => $css->{$_}->{'background-color'});
-							$default{bgcolor} = $css->{$_}->{'background-color'};
-						}
-						else {
-							$style{background} = $css->{$_}->{'background-color'};
-							(scalar(@stackBG)) ? $stackBG[-1] = $style{background} : push(@stackBG,$style{background});
-						}
-					}
-
-					###############################
-					# Font Attributes             #
-					###############################
-					# font:             no
-					# font-family:      supported
-					# font-size:        no
-					# font-size-adjust: no
-					# font-stretch:     no
-					# font-style:       supported
-					# font-variant:     no
-					# font-weight:      supported
-					if (exists $css->{$_}->{'font-family'}) {
-						$style{family} = $css->{$_}->{'font-family'};
-						#push (@stackFont,$style{family});
-						(scalar(@stackFont)) ? $stackFont[-1] = $style{family} : push(@stackFont,$style{family});
-					}
-					if (exists $css->{$_}->{'font-size'}) {
-						$style{size} = $css->{$_}->{'font-size'};
-						#push (@stackFont,$style{size});
-						(scalar(@stackSize)) ? $stackSize[-1] = $style{size} : push(@stackSize,$style{size});
-					}
-					if (exists $css->{$_}->{'font-style'}) {
-						my $st = $css->{$_}->{'font-style'};
-						if ($st eq "italic") {
-							$style{italic} = 'italic';
-						}
-						else {
-							$style{italic} = 'roman';
-						}
-						(scalar(@stackItalic)) ? $stackItalic[-1] = $style{italic} : push(@stackItalic,$style{italic});
-					}
-					if (exists $css->{$_}->{'font-weight'}) {
-						my $st = $css->{$_}->{'font-weight'};
-						if ($st eq "normal" || $st eq "lighter") {
-							$style{bold} = "normal";
-						}
-						else {
-							$style{bold} = "bold";
-						}
-						(scalar(@stackBold)) ? $stackBold[-1] = $style{bold} : push(@stackBold,$style{bold});
-					}
-
-					###############################
-					# Text Attributes             #
-					###############################
-					# color:           supported
-					# text-align:      supported
-					# text-decoration: underline and line-thru supported
-					if (exists $css->{$_}->{'color'}) {
-						if ($_ =~ /^body$/i) {
-							$cw->SUPER::configure (-foreground => $css->{$_}->{color});
-							$default{text} = $css->{$_}->{color};
-						}
-						else {
-							$style{foreground} = $css->{$_}->{color};
-							(scalar(@stackColor)) ? $stackColor[-1] = $style{foreground} :
-								push(@stackColor,$style{foreground});
-						}
-					}
-					if (exists $css->{$_}->{'text-align'}) {
-						$style{align} = $css->{$_}->{'text-align'};
-						(scalar(@stackAlign)) ? $stackAlign[-1] = $style{align} : push(@stackAlign,$style{align});
-					}
-					if (exists $css->{$_}->{'text-decoration'}) {
-						my $dec = $css->{$_}->{'text-decoration'};
-						if ($dec eq "underline") {
-							$style{underline} = 1;
-							(scalar(@stackUnderline)) ? $stackUnderline[-1] = $style{underline} :
-								push (@stackUnderline,$style{underline});
-						}
-						if ($dec eq "line-thru") {
-							$style{overstrike} = 1;
-							(scalar(@stackOverstrike)) ? $stackOverstrike[-1] = $style{overstrike} :
-								push (@stackOverstrike,$style{overstrike});
-						}
-					}
-				}
+			elsif ($tag =~ /^(code|tt|kbd|samp)$/) { # /Code
+				%style = $cw->_rollbackStack(\@stack,'family');
 			}
-			next;
-		}
-		elsif ($sector =~ /^::END::TAG%/i) {
-			$sector =~ s/^::END::TAG%//i; # strip it
-		}
-
-		# If we're titling, don't bother with tags.
-		if ($style{titling} == 1) {
-			# Add this to our page title.
-			$style{title} .= $sector;
-			next;
-		}
-
-		# If we're reading CSS, add it to our buffer.
-		if ($style{incss} == 1) {
-			$style{csscode} .= $sector;
-			next;
-		}
-
-		# (Re)invent a new tag.
-		my $tag = $cw->_makeTag (\%style,\%default,\%hyperlinks);
-		$lastTag = $tag;
-
-		# If this was a hyperlink...
-		if ($style{hyperlink} == 1) {
-			# Bind this tag to an event.
-			my $href = $hyperlinks{$style{linktag}}->{href};
-			my $target = $hyperlinks{$style{linktag}}->{target};
-			$cw->SUPER::tagBind ($tag,"<Button-1>", [ sub {
-				my ($parent,$tag,$href,$target) = @_;
-
-				# Add this to the history.
-				$parent->{hypertext}->{history}->{$href} = 1;
-
-				# Recolor this link.
-				$parent->SUPER::tagConfigure ($tag,
-					-foreground => $default{vlink},
-				);
-
-				# Call our link command.
-				&{$cw->{hypertext}->{linkcommand}} ($parent,$href,$target);
-			}, $tag, $href, $target ]);
-
-			# Set up the hand cursor.
-			$cw->SUPER::tagBind ($tag,"<Any-Enter>", [ sub {
-				my ($parent,$tag) = @_;
-				$cw->SUPER::configure (-cursor => 'hand2');
-				$cw->SUPER::tagConfigure ($tag,
-					-foreground => $default{alink},
-				);
-			}, $tag ]);
-			$cw->SUPER::tagBind ($tag,"<Any-Leave>", [ sub {
-				my ($parent,$tag,$href) = @_;
-				$cw->SUPER::configure (-cursor => 'xterm');
-
-				if (exists $cw->{hypertext}->{history}->{$href}) {
-					$cw->SUPER::tagConfigure ($tag,
-						-foreground => $default{vlink},
-					);
-				}
-				else {
-					$cw->SUPER::tagConfigure ($tag,
-						-foreground => $default{link},
-					);
-				}
-			}, $tag, $href ]);
-		}
-
-		# If this was preformatted text, preserve the line endings and spacing.
-		if ($style{pre} == 1) {
-			# Leave it alone.
-		}
-		else {
-			#$sector =~ s/\x0d//smg;
-			#$sector =~ s/\x0a+//smg;
-			$sector =~ s/\s+/ /sg;
-			#$sector =~ s/^\s*//ig;
-
-			if ($sector =~ /^\s+$/) {
-				$sector = '';
+			elsif ($tag =~ /^(center|right|left)$/) { # /Align
+				$browser->insert('end',"\n",$format);
+				%style = $cw->_rollbackStack(\@stack,'justify');
+				$lineWritten = 0;
+			}
+			elsif ($tag =~ /^(sup|sub)$/) { # /Superscript, /Subscript
+				%style = $cw->_rollbackStack(\@stack,
+					qw(size offset));
+			}
+			elsif ($tag =~ /^(big|small)$/) { # /Big, /Small
+				%style = $cw->_rollbackStack(\@stack,'size');
+			}
+			elsif ($tag =~ /^(b|strong)$/) { # /Bold
+				%style = $cw->_rollbackStack(\@stack,'weight');
+			}
+			elsif ($tag =~ /^(i|em|address|var|cite|def)$/) { # /Italic
+				%style = $cw->_rollbackStack(\@stack,'slant');
+			}
+			elsif ($tag =~ /^(u|ins)$/) { # /Underline
+				%style = $cw->_rollbackStack(\@stack,'underline');
+			}
+			elsif ($tag =~ /^(s|del)$/) { # /Overstrike
+				%style = $cw->_rollbackStack(\@stack,'overstrike');
 			}
 		}
+	}
+}
 
-		# If we wrote something here, inform the rest of the program.
-		if (length $sector) {
-			$lineWritten = 1;
+sub _addStack {
+	my ($cw,$style) = @_;
+
+	my @keys = sort { $a cmp $b } keys %{$style};
+	my @parts = ();
+	foreach my $k (@keys) {
+		my $val = $style->{$k};
+		$val = uri_escape($val);
+		push (@parts,join("=",$k,$val));
+	}
+
+	return join ("&",@parts);
+}
+
+sub _rollbackStack {
+	my ($cw,$stack,@keys) = @_;
+
+	my $newStyle = {};
+	if (scalar @{$stack} > 1) {
+		my $curStack = $stack->[-1];
+		my $lastStack = $stack->[-2];
+		my $curStyle = {};
+		my $lastStyle = {};
+
+		# Collect the style data.
+		foreach my $p (split(/\&/, $curStack)) {
+			my ($k,$val) = split(/=/, $p, 2);
+			$val = uri_unescape($val);
+			$curStyle->{$k} = $val;
+		}
+		foreach my $p (split(/\&/, $lastStack)) {
+			my ($k,$val) = split(/=/, $p, 2);
+			$val = uri_unescape($val);
+			$lastStyle->{$k} = $val;
 		}
 
-		# Filter escape codes.
-		while ($sector =~ /&#([^;]+?)\;/i) {
-			my $decimal = $1;
-			my $hex = sprintf ("%x", $decimal);
-			my $qm = quotemeta("&#$decimal;");
-			my $chr = eval "0x$hex";
-			my $char = chr($chr);
-			$sector =~ s~$qm~$char~i;
-		}
-		for (my $i = 0; $i < scalar(@escape) - 1; $i += 2) {
-			my $qm = quotemeta($escape[$i]);
-			my $rep = $escape[$i + 1];
-			$sector =~ s~$qm~$rep~ig;
+		$newStyle = $lastStyle;
+
+		# For @keys, set these values to what they were before.
+		foreach my $k (@keys) {
+			$newStyle->{$k} = (defined $lastStyle->{$k} &&
+				length $lastStyle->{$k}) ? $lastStyle->{$k} : '';
 		}
 
-		# Finally, insert this bit of text.
-		$cw->SUPER::insert ('end',$sector,$tag);
+		pop(@{$stack});
+		return %{$newStyle};
+	}
+	else {
+		my $curStyle = {};
+
+		foreach my $p (split(/\&/, $stack->[-1])) {
+			my ($k,$val) = split(/=/, $p, 2);
+			$val = uri_unescape($val);
+			$curStyle->{$k} = $val;
+		}
+
+		return %{$curStyle};
 	}
 }
 
 sub _makeTag {
-	my ($cw,$refstyle,$refdefault,$reflinks) = @_;
+	my ($cw,$style,$widget) = @_;
 
-	my %style = %{$refstyle};
-	my %default = %{$refdefault};
-	my %hyperlinks = %{$reflinks};
-
-	# (Re)invent a new tag.
-	my $tag = join ("-",
-		$style{family} || $default{font},
-		$style{size} || $default{size},
-		$style{foreground} || $default{text},
-		$style{background} || $default{bgcolor},
-		$style{weight},
-		$style{slant},
-		$style{underline},
-		$style{overstrike},
-		$style{justify},
-		$style{offset},
-		$style{lmargin1},
-		$style{lmargin2},
-		$style{rmargin},
-		$style{hyperlink},
-		$style{linktag},
-		$style{pre},
-	);
-	$tag =~ s/\s+/+/ig; # convert spaces to +'s.
-
-	# If this size was defined via CSS (i.e. ending with "px"), reset
-	# it to the original size.
-	my $ptsize = '';
-	if ($style{size} =~ /(px|pt|in|cm|mm|em|ex|pc)$/i) {
-		$ptsize = $style{size};
-		$ptsize =~ s/$1//i;
+	my @parts = ();
+	foreach my $k (sort { $a cmp $b } keys %{$style}) {
+		my $val = uri_escape($style->{$k}) || '';
+		push (@parts,$val);
 	}
 
-	# Is this a special hyperlink tag?
-	my $color = $style{foreground} || $default{text};
-	my $uline = $style{underline};
-	my $size  = (length $style{size} > 0) ? $style{size} : $default{size};
-	$ptsize = $cw->_size ($size) unless length $ptsize;
-	if ($style{hyperlink} == 1) {
-		# Temporarily reset the color and underline.
-		my $href = $hyperlinks{$style{linktag}}->{href};
+	my $tag = join("-",@parts);
 
-		#print "link href: $href\n";
-
-		if (exists $cw->{hypertext}->{history}->{$href}) {
-			$color = $default{vlink};
-		}
-		else {
-			$color = $default{link};
-		}
-
-		$uline = 1;
+	if (defined $widget) {
+		$widget->tagConfigure ($tag,
+			-foreground => $style->{foreground},
+			-background => $style->{background},
+			-font       => [
+				-family => $style->{family},
+				-weight => $style->{weight},
+				-slant  => $style->{slant},
+				-size   => $cw->_size ($style->{size}),
+				-underline => $style->{underline},
+				-overstrike => $style->{overstrike},
+			],
+			-offset => $style->{offset},
+			-justify => $style->{justify},
+			-lmargin1 => $style->{lmargin1},
+			-lmargin2 => $style->{lmargin2},
+			-rmargin  => $style->{rmargin},
+		);
 	}
-
-	# Configure this tag.
-	$cw->SUPER::tagConfigure ($tag,
-		-foreground => $color,
-		-background => $style{background},
-		-font       => [
-			-family     => $style{family} || $default{font},
-			-weight     => $style{weight},
-			-slant      => $style{slant},
-			-size       => $ptsize,
-			-underline  => $uline,
-			-overstrike => $style{overstrike},
-		],
-		-offset     => $style{offset},
-		-justify    => $style{justify},
-		-lmargin1   => $style{lmargin1},
-		-lmargin2   => $style{lmargin2},
-		-rmargin    => $style{rmargin},
-	);
+	else {
+		$cw->SUPER::tagConfigure ($tag,
+			-foreground => $style->{foreground},
+			-background => $style->{background},
+			-font       => [
+				-family => $style->{family},
+				-weight => $style->{weight},
+				-slant  => $style->{slant},
+				-size   => $cw->_size ($style->{size}),
+				-underline => $style->{underline},
+				-overstrike => $style->{overstrike},
+			],
+			-offset => $style->{offset},
+			-justify => $style->{justify},
+			-lmargin1 => $style->{lmargin1},
+			-lmargin2 => $style->{lmargin2},
+			-rmargin  => $style->{rmargin},
+		);
+	}
 
 	return $tag;
 }
 
+# Calculates the point size from an HTML size.
 sub _size {
 	my ($cw,$size) = @_;
 
-	# Calculate the point size based on the HTML size.
-	if ($size == 1) {
-		return 8;
-	}
-	elsif ($size == 2) {
-		return 9;
-	}
-	elsif ($size == 3) {
-		return 10;
-	}
-	elsif ($size == 4) {
-		return 12;
-	}
-	elsif ($size == 5) {
-		return 14;
-	}
-	elsif ($size <= 0) {
-		return 6;
-	}
-	elsif ($size >= 6) {
-		return 16;
+	# Translate words to numbers?
+	if ($size =~ /[^0-9]/) {
+		$size = $cw->_sizeStringToNumber ($size);
 	}
 
-	return 6;
+	my %map = (
+		# HTML => Point
+		0 => 8,
+		1 => 9,
+		2 => 10,
+		3 => 12,
+		4 => 14,
+		5 => 16,
+		6 => 18,
+	);
+
+	return exists $map{$size} ? $map{$size} : 10;
 }
 
+# Calculates the HTML size for a heading.
 sub _heading {
 	my ($cw,$level) = @_;
 
-	# Calculate the point size for each H level.
-	my %sizes = (
+	my %map = (
+		# Level => HTML Size
 		1 => 6,
 		2 => 5,
 		3 => 4,
 		4 => 3,
 		5 => 2,
 		6 => 1,
-		7 => 0,
 	);
 
-	return $sizes{$level};
+	return exists $map{$level} ? $map{$level} : 6;
+}
+
+sub _sizeStringToNumber {
+	my ($cw,$string) = @_;
+
+	my %map = (
+		'xx-large' => 6,
+		'x-large'  => 5,
+		'large'    => 4,
+		'medium'   => 3,
+		'small'    => 2,
+		'x-small'  => 1,
+		'xx-small' => 0,
+	);
+
+	return exists $map{$string} ? $map{$string} : 3;
+}
+
+sub _isNumber {
+	my ($cw,$number,$default) = @_;
+
+	if (defined $number && length $number && $number !~ /[^0-9]/) {
+		return $number;
+	}
+	else {
+		return $default;
+	}
 }
 
 sub _getOLsym {
@@ -1990,32 +1542,36 @@ sub _getOLsym {
 		26 => 'Z',
 	);
 
-	# Numeric types are easy.
 	if ($type =~ /^[0-9]+$/) {
+		# Numeric types are easy.
 		return $pos;
 	}
-	elsif ($type eq "I") {
-		return Roman($pos);
-	}
-	elsif ($type eq "i") {
+	elsif ($type eq 'I') {
 		# Roman numerals.
-		return roman($pos);
+		return uc ($cw->_roman($pos));
 	}
-	elsif ($type eq 'a' || $type eq 'A') { # letters
-		my $input = $pos;
+	elsif ($type eq 'i') {
+		# Roman numerals.
+		return lc ($cw->_roman($pos));
+	}
+	elsif ($type =~ /^[A-Za-z]+$/) {
+		# Alphabetic.
 		my $string = '';
-		while ($input > 26) {
-			my $first = $input % 26;
-			my $second = ($input - $first) / 26;
+		while ($pos > 26) {
+			my $first = $pos % 26;
+			my $second = ($pos - $first) / 26;
 			$string = $letterhash{$first} . $string;
-			$input = $second;
+			$pos = $second;
 		}
 
-		$string = $letterhash{$input} . $string;
-		return $string;
-	}
-	elsif ($type eq "A") { # caps
-		#return uc($ALPHA{$pos});
+		$string = $letterhash{$pos} . $string;
+
+		if ($type =~ /^[A-Z]+$/) {
+			return uc($string);
+		}
+		else {
+			return lc($string);
+		}
 	}
 
 	return $pos;
@@ -2027,366 +1583,457 @@ sub _getULsym {
 	my $circle = chr(0x25cb);
 	my $disc   = chr(0x25cf);
 	my $square = chr(0x25aa);
-	my $diam   = chr(0x25c6);
 
-	if ($type =~ /circle/i) {
+	if ($type =~ /^circle$/i) {
 		return $circle;
 	}
-	elsif ($type =~ /square/i) {
+	elsif ($type =~ /^square$/i) {
 		return $square;
 	}
-	elsif ($type =~ /disc/i) {
+	else {
 		return $disc;
 	}
-	elsif ($type =~ /diam/i) {
-		return $diam;
-	}
-
-	elsif ($type =~ /^#([^;]+?)$/) {
-		my $decimal = $1;
-		my $hex = sprintf ("%x", $decimal);
-		my $qm = quotemeta("&#$decimal;");
-		my $chr = eval "0x$hex";
-		my $char = chr($chr);
-		return $char;
-	}
-
-	return $type;
 }
 
-################################
-# Copied from CSS::Tiny        #
-################################
+sub _roman {
+	my ($cw,$dec) = @_;
 
-sub parseCSS {
-	my $cw = shift;
-	my $self = {};
+	0 < $dec and $dec < 4000 or return undef;
 
-	# Flatten whitespace and remove /* comment */ style comments
-	my $string = shift;
-	$string =~ tr/\n\t/  /;
-	$string =~ s!/\*.*?\*\/!!g;
+	my %roman2arabic = qw(I 1 V 5 X 10 L 50 C 100 D 500 M 1000);
+	my %roman_digit = qw(1 IV 10 XL 100 CD 1000 MMMMMM);
+	my @figure = reverse sort keys %roman_digit;
+	$roman_digit{$_} = [ split(//, $roman_digit{$_}, 2) ] foreach @figure;
 
-	# Split into styles
-	foreach ( grep { /\S/ } split /(?<=\})/, $string ) {
-		unless ( /^\s*([^{]+?)\s*\{(.*)\}\s*$/ ) {
-			warn "Invalid or unexpected style data '$_'";
+	my ($x,$roman);
+	foreach (@figure) {
+		my ($digit, $i, $v) = (int($dec / $_), @{$roman_digit{$_}});
+		if (1 <= $digit and $digit <= 3) {
+			$roman .= $i x $digit;
 		}
+		elsif ($digit == 4) {
+			$roman .= join("", $i, $v);
+		}
+		elsif ($digit == 5) {
+			$roman .= $v;
+		}
+		elsif (6 <= $digit and $digit <= 8) {
+			$roman .= $v . ($i x ($digit - 5));
+		}
+		elsif ($digit == 9) {
+			$roman .= join("", $i, $x);
+		}
+		$dec -= $digit * $_;
+		$x = $i;
+	}
 
-		# Split in such a way as to support grouped styles
-		my $style = $1;
-		$style =~ s/\s{2,}/ /g;
-		my @styles = grep { s/\s+/ /g; 1; } grep { /\S/ } split /\s*,\s*/, $style;
-		foreach ( @styles ) { $self->{$_} ||= {} }
+	return $roman;
+}
 
-		# Split into properties
-		foreach ( grep { /\S/ } split /\;/, $2 ) {
-			unless ( /^\s*([\w._-]+)\s*:\s*(.*?)\s*$/ ) {
-				warn "Invalid or unexpected property '$_' in style '$style'";
-			}
-			foreach ( @styles ) { $self->{$_}->{lc $1} = $2 }
+sub _blockedTag {
+	my ($self,$tag) = @_;
+
+	my $deny = 0;
+
+	# If we have defined any "allowed tags", check it.
+	if (scalar keys %{$self->{hypertext}->{allow}} > 0) {
+		$deny = 1;
+
+		# See if this tag is allowed.
+		if (exists $self->{hypertext}->{allow}->{$tag}) {
+			$deny = 0;
 		}
 	}
 
-	return $self;
+	# If we have any "denied tags", check them.
+	if (scalar keys %{$self->{hypertext}->{deny}} > 0) {
+		if (exists $self->{hypertext}->{deny}->{$tag}) {
+			$deny = 1;
+		}
+	}
+
+	return $deny;
 }
 
-################################
-# Copied from Roman.pm to make #
-# our code more independent.   #
-################################
-
-our %roman2arabic = qw(I 1 V 5 X 10 L 50 C 100 D 500 M 1000);
-my %roman_digit = qw(1 IV 10 XL 100 CD 1000 MMMMMM);
-my @figure = reverse sort keys %roman_digit;
-$roman_digit{$_} = [split(//, $roman_digit{$_}, 2)] foreach @figure;
-
-sub isroman($) {
-    my $arg = shift;
-    $arg ne '' and
-      $arg =~ /^(?: M{0,3})
-                (?: D?C{0,3} | C[DM])
-                (?: L?X{0,3} | X[LC])
-                (?: V?I{0,3} | I[VX])$/ix;
-}
-
-sub arabic($) {
-    my $arg = shift;
-    isroman $arg or return undef;
-    my($last_digit) = 1000;
-    my($arabic);
-    foreach (split(//, uc $arg)) {
-        my($digit) = $roman2arabic{$_};
-        $arabic -= 2 * $last_digit if $last_digit < $digit;
-        $arabic += ($last_digit = $digit);
-    }
-    $arabic;
-}
-
-sub Roman($) {
-    my $arg = shift;
-    0 < $arg and $arg < 4000 or return undef;
-    my($x, $roman);
-    foreach (@figure) {
-        my($digit, $i, $v) = (int($arg / $_), @{$roman_digit{$_}});
-        if (1 <= $digit and $digit <= 3) {
-            $roman .= $i x $digit;
-        } elsif ($digit == 4) {
-            $roman .= "$i$v";
-        } elsif ($digit == 5) {
-            $roman .= $v;
-        } elsif (6 <= $digit and $digit <= 8) {
-            $roman .= $v . $i x ($digit - 5);
-        } elsif ($digit == 9) {
-            $roman .= "$i$x";
-        }
-        $arg -= $digit * $_;
-        $x = $i;
-    }
-    $roman;
-}
-
-sub roman($) {
-    lc Roman shift;
+sub _brokenImage {
+	return q~iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABGdBTUEAAK/INwWK6QAAABl0RVh0
+U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAKTSURBVHjaYmxpafnPMEAgPT2dASCAWECM
+6upqxoFwwJs3b/4DBBATwwADgAAacAcABNCAOwAggAbcAQABNOAOAAigAXcAQAANuAMAAmjAHQAQ
+QAPuAIAAItoBjIyM04D4PxKeBhVPBuIzyOJAzEesuQABxESk5S4uoqKZ/6urGf63tjL89/ZmUGJh
+yQSKBwGlM8/U1hr/Ly5m+C8oyJAK5DNAMFEAIIAYQJUREDAQwkAwrYON7f9/Tc3//5WV/+8WEAAJ
+7i53c/v/v7T0/xsGhv8xQAwUOwPEfMSY+fr16/8AAUSKA+SB+O4hoCXAcP7/X1b2f7mu7v//RUX/
+/7Ow/I8GigtCHJBMjHkwBwAEENFpAKjhIZCaXosQYOjg5GRgWLWKYfKfPwwngELvgfJAdXNJSYQA
+AURSLgAa3nOQgWH1ahkZBgY2NgaGW7cYnj95wvAaFDRg+xk6Sc0FAAFEkgOAiQ4UDcbGJiYMDOzs
+DD8+fGBgBgrYAbE4AwMwBhhcSHUAQACRWg6Ud7i4KClxcTE8uX6dYRdQ4C0Q6wPxVIh8JilZEAQA
+AoiUciBZSUgos9zIiIFh+XKGFqBYPhCD4p4ViJ2BOA0YOkCqgxQHAAQQseUAyFeZq8zNGRjmzmUo
++vePYQ9Q4AEw0YF8fhaILwOxJxDzQkIhiFgHAAQQC5HqMssZGY0/b9/OEAvk3IEkunugRAe0nBno
+iDRQWvgAxI5AvAlSEK0jxmCAACKqHAAVLKCCiAGSz/9D7GcogcoZAPFMJLndQBxEbDkAEEAsRGa/
+T0AqC4rR5S6AWthQTDIACKABrw0BAmjAHQAQQAPuAIAAGnAHAATQgDsAIIAG3AEAATTgDgAIIEZw
+q2QAAUCAAQBj+lYRrQ+vagAAAABJRU5ErkJggg==~;
 }
 
 1;
 
+__END__
+
 =head1 NAME
 
-Tk::HyperText - Create and manipulate ROText widgets which render HTML code.
+Tk::HyperText - An ROText widget which renders HTML code.
 
 =head1 SYNOPSIS
 
-  my $hypertext = $mw->Scrolled ("HyperText",
-    -scrollbars   => 'e',
-    -wrap         => 'word',
-    -linkcommand  => \&onLink,  # what to do when <a> links are clicked
-    -titlecommand => \&onTitle, # what to do when <title>s are found
+  use Tk::HyperText;
+
+  my $html = $mw->Scrolled ('HyperText',
+    -scrollbars => 'ose',
+    -wrap       => 'word',
   )->pack (-fill => 'both', -expand => 1);
 
-  # insert some HTML code
-  $hypertext->insert ("end","<body bgcolor=\"black\" text=\"yellow\">"
-    . "Hello, <b>world!</b></body>");
+  $html->setHandler (Title    => \&onNewTitle);
+  $html->setHandler (Resource => \&onResource);
+  $html->setHandler (Submit   => \&onFormSubmit);
+
+  $html->loadString (qq~<html>
+    <head>
+    <title>Hello world!</title>
+    </head>
+    <body bgcolor="#0099FF">
+    <font size="6" family="Impact" color="#FFFFFF">
+    <strong>Hello, world!</strong>
+    </font>
+    </body>
+    </html>
+  ~);
+
+=head1 DESCRIPTION
+
+C<Tk::HyperText> is a widget derived from C<Tk::ROText> that renders HTML
+code.
+
+=head2 PURPOSE
+
+First of all, B<Tk::HyperText is NOT expected to become a full-fledged web
+browser widget>. This module's original idea was just to be a simple
+HTML-rendering widget, specifically to match the capabilities of the
+I<AOL Instant Messenger>'s HTML widgets. That is, to render basic text
+formatting, images, and hyperlinks. Anything this module does that's extra
+is only there because I was up to the challenge.
+
+=head2 VERSION 0.06+
+
+This module is B<NOT> backwards compatible with versions 0.05 and below.
+Specifically, the module was rewritten to use C<HTML::TokeParser> as its
+HTML parsing engine instead of parsing it as plain text. Also, the methods
+have all been changed. The old module's overloading of the standard
+C<Tk::Text> methods was causing all kinds of problems, and since this isn't
+really a "drop-in" replacement for the other Text widgets, its methods don't
+need to follow the same format.
+
+Also, support for Cascading StyleSheets doesn't work at this time. It may be
+re-implemented at a later date, but, as this widget is not meant to become
+a full-fledged web browser (see L<"PURPOSE">), the CSS support might not
+return.
+
+=head2 EXAMPLE
+
+Run the `demo.pl` script included in the distribution.
 
 =head1 WIDGET-SPECIFIC OPTIONS
 
 =over 4
 
-=item B<-rerender>
+=item -continuous, -continue
 
-Boolean. When true (the default), the ENTIRE contents of your HyperText widget will
-be (re)rendered every time you modify it. In this way, if you insert, e.g. a "bold"
-tag and don't close it, then insert new text, the new text should logically still be
-in bold, and it would be when this flag is true.
+Setting this option to 1 tells the widget B<not> to re-render the entire
+contents of the widget each time the contents are updated. The default value
+is 0, so the entire page contents are rendered on any updates. This causes
+the code to be "continuous", so that i.e. if you fail to close a bold tag and
+then insert more code, the new code should carry on the unclosed tag and
+appear in bold. Setting this option to 1 would render the new code
+independently from the existing page and is therefore unnatural in HTML.
 
-When false, only the newly inserted text will be rendered independently of what else
-is already there. If re-rendering the page is too slow for you, try disabling this flag.
+C<-continue> is an alias for C<-continuous> if you're terrible at spelling.
 
-=item B<-titlecommand>
+=item -allow, -deny
 
-This should be a CODEREF pointing to a subroutine that will handle changes in a
-page's title. While HTML code is being parsed, when a title tag is found, it will
-call this method.
+Define tags that are allowed or denied. See L<"WIDGET METHODS"> for more
+details.
 
-The callback will received the following variables:
+=item -attributes
 
-  $widget = a reference to the HyperText widget that wants to set a title.
-  $title  = the text in the <title> tag.
+Since Tk::HyperText doesn't yet support Cascading Style Sheets, the only
+alternative is to send in C<-attributes>. This data structure defines some
+default styles for use within the rendered pages.
 
-=item B<-linkcommand>
-
-This should be a CODEREF pointing to a subroutine that will handle the clicking
-of hyperlinks.
-
-The callback will received the following variables:
-
-  $widget = a reference to the HyperText widget that invoked the link.
-  $href   = the value of the link's "href" attribute.
-  $target = the value of the link's "target" attribute.
-
-=item B<-attributes>
-
-This option will allow you to define all of the default settings for the display
-of HTML pages. Here's an example:
-
-  my $html = $mw->Scrolled ("HyperText",
+  my $html = $mw->Scrolled('HyperText',
     -attributes => {
-      body => {
-        bgcolor => 'white',
-        text    => 'black',
-        link    => 'blue',
-        vlink   => 'purple',
-        alink   => 'red',
+      -anchor => {              # Hyperlink colors
+        -normal  => '#0000FF',  # or 'blue'
+        -hover   => '#FF0000',  # or 'red'
+        -active  => '#FF0000',  # or 'red'
+        -visited => '#990099',  # or 'purple'
       },
-      font => {
-        family => 'Arial',
-        size   => 3,
-        color  => '', # inherit from <body>
-        back   => '', # inherit from <body>
+      -font => {
+        -family => 'Times',
+        -mono   => 'Courier',
+        -size   => 'medium',    # or any HTML size
+                                # (1..6, xx-small..xx-large)
+
+        # Text styles, set them to 1 to apply the effect.
+        # I don't see why anyone would want to use these,
+        # but they're here anyway.
+        -bold   => 0, # Bold
+        -italic => 0, # Italic
+        -under  => 0, # Underline
+        -over   => 0, # Overstrike
+      },
+      -style => {
+        -margins => 0,         # Text margins
+        -color   => '#000000', # Text color
+        -back    => '#FFFFFF', # Text BG color
       },
     },
-  )->pack;
-
-=item B<-basehref>
-
-The "base href" of the webpages being rendered. This should be the local file
-path (ex. "./demolib"). The base href can be reset using the E<lt>baseE<gt> tag
-in a webpage. The base href is used for locating external files, such as images.
+  );
 
 =back
-
-=head1 DESCRIPTION
-
-Tk::HyperText is a derived Tk::ROText class which supports the automatic rendering
-of HTML code. It's designed to be easily useable as a drop-in replacement to any
-Tk::ROText widget. Rendering HTML code is as easy as B<insert>ing it as raw HTML,
-as shown in the synopsis.
 
 =head1 WIDGET METHODS
 
-In addition to all of the methods exported by Tk::ROText and Tk::Text, the following
-methods have special behaviors:
-
 =over 4
 
-=item I<$text-E<gt>>B<insert> I<(where, html-code)>
+=item I<$text>-E<gt>B<setHandler> I<(name =E<gt> event)>
 
-Insert new HTML code, and render it automatically. Note that currently, only inserting
-to the "end" works. See L<"BUGS"> below.
+Define a handler for certain events that happen within the widget. See
+L<"EVENTS"> for more information.
 
-=item I<$text-E<gt>>B<delete> I<(start, end)>
+  $html->setHandler (Title => sub {
+    my ($self,$newTitle) = @_;
 
-Delete content from the textbox. Note that currently you can only delete EVERYTHING.
-See L<"BUGS"> below.
+    $mw->configure (-title => $newTitle);
+  });
 
-=item I<$text-E<gt>>B<get> I<(start, end)>
+=item I<$text>-E<gt>B<allowedTags> I<(tags)>
 
-Get the HTML code back out of the widget. Note that currently this gets ALL of the code.
-See L<"BUGS">. This returns the actual HTML code, not just the text that's been rendered.
+Specify a set of tags that are allowed to be rendered. Pass in the tag names
+as an array. If the "allow list" has any entries, B<only> these tags will be
+rendered.
 
-=item I<$text-E<gt>>B<clear>
+=item I<$text>-E<gt>B<deniedTags> I<(tags)>
 
-Clear the entire text widget display.
+Specify a set of tags that are B<not> allowed to be rendered. If the "allow
+list" is empty and the "denied list" has any entries, then all tags are
+allowed B<except> for those in the denied list. If any entries in the denied
+list conflict with entries in the allowed list, those tags are B<not>
+allowed.
 
-=item I<$text-E<gt>>B<clearHistory>
+=item I<$text>-E<gt>B<allowHypertext> I<()>
 
-Clear the history in the text widget. This will make all the links that were "visited
-links" become "unvisited links" again.
+This is a preset allow/deny scheme. It allows all hypertext tags (basic
+text formatting, images, and horizontal rules) but doesn't allow tables,
+forms, lists, or other complicated tags. This will make it match the
+capabilities of I<AOL Instant Messenger>'s HTML rendering widgets.
 
-=item I<$text-E<gt>>B<namesMode> I<([new-mode])>
+It will allow the following tags:
 
-Change the permissions mode. Valid options are C<allow_all, allow_some, deny_some, deny_all>.
-The default is C<allow_all>. Returns the current mode.
+  <html>, <head>, <title>, <body>, <a>, <p>, <br>, <hr>,
+  <img>, <font>, <center>, <sup>, <sub>, <b>, <i>,
+  <u>, <s>
 
-=item I<$text-E<gt>>B<namesAllow> I<([tag-list])>
+All other tags are denied.
 
-Add the list of tags to the allow list when the permissions mode is set to C<allow_some>, or
-removes them from the deny list if the mode is C<deny_some>.
+=item I<$text>-E<gt>B<allowEverything> I<()>
 
-  $hypertext->namesAllow ("<body>", "<font>", "<br>");
+Allows all supported tags to be rendered. It resets the "allow" and
+"deny" lists to be blank.
 
-=item I<$text-E<gt>>B<namesDeny> I<([tag-list])>
+=item I<$text>-E<gt>B<loadString> I<(html_code)>
 
-Add the list of tags to the deny list when the permissions mode is set to C<deny_some>, or
-removes them from the allow list if the mode is C<allow_some>.
+Render a string of HTML code into the text widget. This will replace all of
+the current contents of the widget with the new HTML code.
 
-  $hypertext->namesDeny ("<img>", "<hr>");
+=item I<$text>-E<gt>B<loadBlank> I<()>
+
+Blanks out the contents of the widget (similar to the "C<about:blank>" URI
+in most modern web browsers).
+
+=item I<$text>-E<gt>B<clearHistory> I<()>
+
+Resets the browsing history (so "visited links" will become "normal links"
+again).
+
+=item I<$text>-E<gt>B<getText> I<([as_html])>
+
+Returns the contents of the widget as a string. Send a true value as an
+argument to get the contents back including HTML code. Otherwise, only the
+plain text content is returned.
 
 =back
 
-=head1 SUPPORTED HTML
+=head1 EVENTS
 
-The following HTML tags and attributes are fully supported by this module:
+All events receive a reference to its parent widget as C<$_[0]>.
+The following are the event handlers currently supported by
+C<Tk::HyperText>:
 
-  <html>, <head>
-  <title>      *calls -titlecommand when found
-  <link>       (type media href)
-  <style>      (type)
-  <body>       (bgcolor, link, vlink, alink, text)
-  <basefont>   (face, size, color)
-  <base>       (href)
-  <font>       (face, size, color, back)
-  <img>        (src, align, hspace, vspace)*
-  <hr>         (size, width)
-  <a>          (href, target)
-  <ol>, <ul>   (type, start)
+=over 4
+
+=item Title ($self, $newTitle)
+
+This event is called every time a C<< <title>...</title> >> sequence is found
+in the HTML code. C<$newTitle> is the text of the new page title.
+
+=item Resource ($self, %info)
+
+This event is called whenever an external resource is requested (such as an
+image or a hyperlink trying to link to another page). C<%info> contains all
+the information about the requested resource.
+
+  # For hyperlinks (<a> tags)
+  %info = (
+    tag    => 'a',                 # The HTML tag.
+    href   => 'http://google.com', # The <a href> attribute.
+    src    => 'http://google.com', # src is an alias for href
+    target => '_blank',            # The <a target> attribute
+  );
+
+  # For images (<img> tags)
+  %info = (
+    tag    => 'img',        # The HTML tag.
+    src    => 'avatar.jpg', # The <img src> attribute.
+    width  => 48,           # The <img width> attribute.
+    height => 48,           # The <img height> attribute.
+    vspace => '',           # <img vspace>
+    hspace => '',           # <img hspace>
+    align  => '',           # <img align>
+    alt    => 'alt text',   # <img alt>
+  );
+
+B<Note about Images:> The C<Resource> event, when called for an image, wants
+you to return the image's data, Base64-encoded. Otherwise, the image on the
+page will show up as a "broken image" icon. Here is an example of how to
+handle image resources:
+
+  use LWP::Simple;
+  use MIME::Base64 qw(encode_base64);
+
+  $html->setHandler (Resource => sub {
+    my ($self,%info) = @_;
+
+    if ($info{tag} eq 'img') {
+
+      # If an http:// link, get the image from the web.
+      if ($info{src} =~ /^http/i) {
+        my $bin = get $info{src};
+        my $enc = encode_base64($bin);
+        return $enc;
+      }
+
+      # Otherwise, read it from a local file.
+      else {
+        if (-f $src) {
+          open (READ, $src);
+          binmode READ;
+          my @bin = <READ>;
+          close (READ);
+          chomp @bin;
+
+          my $enc = encode_base64(join("\n",@bin));
+          return enc;
+        }
+      }
+    }
+
+    return undef;
+  });
+
+On hyperlink resources, the module doesn't need or expect any return value.
+It should be up to the handler to do what it needs (i.e. fetch the source
+of the page, blank out the HTML widget and then C<loadString> the new code
+into it).
+
+=item Submit ($self,%info)
+
+This event is called when an HTML form has been submitted. C<%info> is a
+hash containing the information about the event.
+
+  %info = (
+    form    => 'login',      # The <form name> attribute.
+    action  => '/login.cgi', # The <form action> attribute.
+    method  => 'POST',       # The <form method> attribute.
+    enctype => 'text/plain', # The <form enctype> attribute.
+    fields  => {             # Hashref of form names and values.
+      username => 'soandso',
+      password => 'bigsecret',
+      remember => 1,
+    },
+  );
+
+The event doesn't want or expect a return value, similarly to the C<Resource>
+event for normal anchor tags. Your code should know what to do with this
+event (i.e. get C<LWP::UserAgent> to post the form to a remote web address,
+stream the results of the request in through C<loadString>, etc.)
+
+=back
+
+=head1 HTML SUPPORT
+
+The following tags and attributes are supported by this module:
+
+  <html>
+  <head>
+  <title>
+  <body>     (bgcolor, text, link, alink, vlink)
+  <a>        (href, target)
+  <br>
+  <p>
+  <form>     (name, action, method, enctype)
+  <textarea> (name, cols, rows, disabled)
+  <select>   (name, size, multiple)
+  <option>   (value, selected)
+  <input>    (name, type, size, value, maxlength, disabled, checked)
+              types: text, password, checkbox, radio, button, submit, reset
+  <table>    (border, cellspacing, cellpadding)
+  <tr>
+  <td>       (colspan, rowspan)
+    <th>
+    <thead>
+    <tbody>
+    <tfoot>
+  <hr>       (height, size)
+  <img>      (src, width, height, vspace, hspace, align, alt)*
+  <font>     (face, size, color, back)
+    <basefont>
+  <h1>..<h6>
+  <ol>       (type, start)
+  <ul>       (type)
   <li>
-  <div>        (align=left|center|right)
-  <span>
   <blockquote>
-  <p>, <br>
+  <div>      (align)
+  <span>
   <pre>
-  <code>, <tt>, <kbd>, <samp>
-  <center>, <right>, <left>
-  <h1> - <h6>
-  <sup>, <sub>
-  <b>, <strong>
-  <i>, <em>, <address>, <var>, <cite>, <def>
-  <u>, <ins>
-  <s>, <del>
-
-* Image alignment must be "top", "middle", "bottom", or "baseline". Tk::Text doesn't
-support "left" and "right" alignments.
-
-=head1 SUPPORTED CSS
-
-CSS support is relatively new as of version 0.05. The following "kinds" of CSS are
-supported:
-
-  External CSS files (<link type="text/css" href="external.css">)
-  Internal CSS code (<style type="text/css">)
-
-The following type is B<NOT> supported:
-
-  Inline CSS (<span style="...">)
-
-As far as the actual CSS code, the following attributes are supported:
-
-  background       (only the "color" part)
-  background-color
-  font-family
-  font-size        *
-  font-style
-  font-weight      (bold, lighter, normal--lighter is the same as normal)
-  text-decoration  (none, underline, line-thru)
-  text-align       (left, center, right)
-  color
-
-* With C<font-size>, if you don't specify a unit of measurement, it's taken as
-a regular HTML font size (range 1 through 6). If you do specify a unit (i.e. px,
-pt, em, etc), the font size will be taken as a B<point size>.
-
-=head1 IMAGES
-
-A couple of default images were provided within the module (Base64-encoded) to
-display when something is wrong with an image in your HTML code.
-
-C<$Tk::HyperText::IMG_BROKEN> is the Base64 data for the "image not found" image.
-It displays as a PNG image of a red "X" within a sunken-bordered box.
-
-C<$Tk::HyperText::IMG_INVALID> is the Base64 data for the "invalid image data"
-image. It displays as a PNG image of a yellow exclamation mark within a sunken
-box.
-
-These images are included in their regular PNG form in the distribution of
-Tk::HyperText. You can reset these variables in your program if you'd like to
-have customized default images to handle these cases.
-
-=head1 EXAMPLE
-
-Run the `demo.pl` program included in the distribution for a demonstration. It's a
-kind of simple web browser that views HTML pages in the "demolib" directory, and
-supports hyperlinks that link from one page to another.
-
-=head1 BUGS
-
-As noted above, the B<insert> method only inserts at the end, B<delete> deletes
-everything, and B<get> gets everything. I plan on coming up with a way to fix this
-in a later version.
-
-There's a minor bug in the counting of alphabetic ordered lists. It counts them
-from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.
+  <code>
+    <tt>
+    <kbd>
+    <samp>
+  <center>
+    <right>
+    <left>
+  <sup>
+  <sub>
+  <big>
+  <small>
+  <b>
+    <strong>
+  <i>
+    <em>
+    <address>
+    <var>
+    <cite>
+    <def>
+  <u>
+    <ins>
+  <s>
+    <del>
 
 =head1 SEE ALSO
 
@@ -2394,8 +2041,11 @@ L<Tk::ROText> and L<Tk::Text>.
 
 =head1 CHANGES
 
-0.05 July 11, 2007
+  0.06 July 14, 2008
+  - The module uses HTML::TokeParser now and does "real" HTML parsing.
+  - Badly broke backwards compatibility.
 
+  0.05 July 11, 2007
   - Added support for "tag permissions", so that you can allow/deny specific tags from
     being rendered (i.e. say you're making a chat client which uses HTML and you don't
     want people inserting images into their messages, or style sheets, etc)
@@ -2413,8 +2063,7 @@ L<Tk::ROText> and L<Tk::Text>.
     on links (using it as a true active color is mostly useless, since most of the
     time the page won't remain very long when clicking on a link to even see it)
 
-0.04 June 23, 2007
-
+  0.04 June 23, 2007
   - Added support for the <basefont> tag.
   - Added support for <ul>, <ol>, and <li>. I've even extended the HTML specs a
     little and added "diamonds" as a shape for <ul>, and allowed <ul> to specify
@@ -2423,19 +2072,21 @@ L<Tk::ROText> and L<Tk::Text>.
     be applied to the links.
   - Fixed the <blockquote> so that the margin applies to the right side as well.
 
-0.02 June 20, 2007
-
+  0.02 June 20, 2007
   - Bugfix: on consecutive insert() commands (without clearing it in between),
     the entire content of the HTML already in the widget would be inserted again,
     in addition to the new content. This has been fixed.
 
-0.01 June 20, 2007
-
+  0.01 June 20, 2007
   - Initial release.
 
 =head1 AUTHOR
 
-Casey Kirsle, E<lt>casey at cuvou.netE<gt>
+Casey Kirsle, http://www.cuvou.com/
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
+at your option, any later version of Perl 5 you may have available.
 
 =cut
 

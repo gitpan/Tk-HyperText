@@ -1,172 +1,162 @@
 #!/usr/bin/perl -w
 
-# Tk::HyperText Demonstration: The browsing of a very simple "web site"
-
 use strict;
 use warnings;
 use lib "./lib";
 use Tk;
 use Tk::HyperText;
+use LWP::Simple;
+use MIME::Base64 qw(encode_base64);
+use Data::Dumper;
 
-# Create the MainWindow.
-our $mw = MainWindow->new (
-	-title => 'Tk::HyperText',
+my $curPage = '';
+
+my $mw = MainWindow->new (
+	-title => 'Demo',
 );
-$mw->geometry ('550x400');
+$mw->geometry ('640x480');
 
-# Some variables for our browser.
-my $url     = "index.html";
-my @history = ();
-my $index   = 0;
+my $topFrame = $mw->Frame->pack (-side => 'top', -fill => 'x');
+my $mainFrame = $mw->Frame->pack (-side => 'top', -fill => 'both', -expand => 1);
 
-###############################
-# Draw the toolbars           #
-###############################
-
-my $toolbar = $mw->Frame (
-	-borderwidth => 2,
-	-relief      => 'raised',
-)->pack (-side => 'top', -fill => 'x');
-
-my $btnBack = $toolbar->Button (
-	-text    => "Back",
-	-command => \&goBack,
-)->pack (-side => 'left');
-my $btnForward = $toolbar->Button (
-	-text    => "Forward",
-	-command => \&goForward,
-)->pack (-side => 'left');
-my $btnReload = $toolbar->Button (
-	-text    => "Reload",
-	-command => \&reload,
-)->pack (-side => 'left', -padx => 5);
-my $btnHome = $toolbar->Button (
-	-text    => "Home",
-	-command => \&home,
-)->pack (-side => 'left');
-my $btnClear = $toolbar->Button (
-	-text    => "Clear History",
-	-command => \&history,
-)->pack (-side => 'left');
-my $btnExit = $toolbar->Button (
-	-text    => "Exit",
+$topFrame->Button (
+	-text => 'Reload',
 	-command => sub {
-		exit(0);
+		&loadPage($curPage);
 	},
-)->pack (-side => 'right');
+)->pack (-side => 'left');
+$topFrame->Button (
+	-text => 'Home',
+	-command => sub {
+		&loadPage('index.html');
+	},
+)->pack (-side => 'left');
+$topFrame->Button (
+	-text => 'Clear History',
+	-command => sub {
+		&clearHistory();
+	},
+)->pack (-side => 'left');
 
-###############################
-# Draw the HyperText Widget   #
-###############################
-
-my $mainframe = $mw->Frame (
+my $html = $mainFrame->Scrolled ('HyperText',
+	-scrollbars => 'e',
+	-wrap       => 'word',
 )->pack (-fill => 'both', -expand => 1);
 
-my $hypertext = $mainframe->Scrolled ("HyperText",
-	-scrollbars   => 'e',
-	-titlecommand => \&onTitle,
-	-linkcommand  => \&onLink,
-	-basehref     => "./demolib",
-	-wrap         => 'word',
-)->pack (-fill => 'both', -expand => 1);
-
-# Link to our homepage.
-&openPage ("index.html");
+$html->setHandler (Title    => \&onTitle);
+$html->setHandler (Resource => \&onResource);
+$html->setHandler (Submit   => \&onSubmit);
+&loadPage('index.html');
 
 $mw->bind ('<Control-s>', sub {
-	my $code = $hypertext->get ("0.0","end");
-	print $code . "\n";
+	print $html->getText(1) . "\n";
+});
+$mw->bind ('<Control-t>', sub {
+	print $html->getText() . "\n";
 });
 
-MainLoop;
-
-###############################
-# Our Subroutines             #
-###############################
-
-# This sub opens a page for display in our "browser"
-sub openPage {
-	my $page = shift;
-	my $history = shift || 0; # clicked back or forward
-	$url = $page;
-
-	print "Opening page: $page\n";
-	push (@history,$page);
-	$index = scalar(@history) - 1 unless $history;
-
-	my @html = ();
-	if (-f "./demolib/$page") {
-		open (PAGE, "./demolib/$page");
-		@html = <PAGE>;
-		close (PAGE);
-		chomp @html;
-	}
-	else {
-		@html = ("<html>",
-			"<head>",
-			"<title>404 Page Not Found</title>",
-			"</head>",
-			"<body>",
-			"<h1>404 Page Not Found</h1>",
-			"The page $page was not found.",
-			"</body>",
-			"</html>");
-	}
-
-	# Clear the page viewer.
-	$hypertext->clear;
-
-	# Insert the HTML code.
-	$hypertext->insert ("end",join ("\n",@html));
-}
-
-# The Back, Forward, and Home buttons.
-sub goBack {
-	# Minus the index.
-	$index--;
-	if (defined $history[$index]) {
-		&openPage($history[$index],1);
-	}
-}
-sub goForward {
-	# Plus the index.
-	$index++;
-	if (defined $history[$index]) {
-		&openPage($history[$index],1);
-	}
-}
-sub reload {
-	&openPage ($url,1);
-}
-sub home {
-	&openPage ("index.html");
-}
-sub history {
-	$hypertext->clearHistory;
-	&openPage ($url,1);
-}
-
-# This sub gets called when a page sets a <title>
 sub onTitle {
 	my ($cw,$title) = @_;
 
-	# Set our MW title.
-	$mw->title ("$title - Tk::HyperText");
+	$mw->configure (-title => $title);
 }
 
-# This sub gets called when we click on a hyperlink.
-sub onLink {
-	my ($cw,$href,$target) = @_;
+sub onSubmit {
+	my ($cw,%info) = @_;
 
-	print "Link clicked: open $href in $target\n";
+	print "Submitted form $info{form}: " . Dumper(\%info);
+	&loadPage($info{action});
+}
 
-	# If target="_blank", open this link in our own web browser.
-	if ($target eq "_blank") {
-		my $htmlview = ($^O =~ /win32/i) ? "start" : "htmlview";
-		system ("$htmlview $href");
+sub onResource {
+	my ($cw,%info) = @_;
+
+	if ($info{tag} eq 'a') {
+		# Hyperlink
+		if ($info{target} ne '_blank') {
+			if ($info{href} =~ /^http/i) {
+				my $code = get $info{href};
+				$html->loadString($code);
+			}
+			else {
+				&loadPage ($info{href});
+			}
+		}
+		else {
+			my $htmlview = 'start';
+			if ($^O !~ /win32/i) {
+				my @try = ("htmlview","firefox","mozilla","opera");
+				foreach my $t (@try) {
+					my $res = system("which $t");
+					if ($res == 0) {
+						$htmlview = $t;
+						last;
+					}
+				}
+
+				if ($htmlview eq 'start') {
+					$htmlview = undef;
+				}
+			}
+
+			if (defined $htmlview) {
+				system("$htmlview \"$info{href}\"");
+			}
+			else {
+				$mw->messageBox (
+					-title   => 'Error',
+					-type    => 'Ok',
+					-icon    => 'error',
+					-message => "Couldn't open hyperlink: no suitable browser found!",
+				);
+			}
+		}
+	}
+	elsif ($info{tag} eq 'img') {
+		# Fetching an image.
+		my $src = $info{src};
+		if ($src =~ /^http/i) {
+			my $bin = get $src;
+			my $enc = encode_base64 ($bin);
+			return $enc;
+		}
+		else {
+			if (-f "./demo/$src") {
+				open (READ, "./demo/$src");
+				binmode READ;
+				my @bin = <READ>;
+				close (READ);
+				chomp @bin;
+
+				my $enc = encode_base64 (join("\n",@bin));
+				return $enc;
+			}
+		}
+	}
+
+	return undef;
+}
+
+sub loadPage {
+	my $page = shift;
+
+	$curPage = $page;
+
+	if (-f "./demo/$page") {
+		open (READ, "./demo/$page");
+		my @html = <READ>;
+		close (READ);
+		chomp @html;
+
+		$html->loadString(join("\n",@html));
 	}
 	else {
-		# Load this page in our own "browser"
-		&openPage ($href);
+		$html->loadString("<h1>404 Page Not Found</h1>");
 	}
 }
+
+sub clearHistory {
+	$html->clearHistory();
+}
+
+MainLoop;

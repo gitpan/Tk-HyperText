@@ -2,309 +2,471 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title>Tk::HyperText - Create and manipulate ROText widgets which render HTML code.</title>
+<title>Tk::HyperText - An ROText widget which renders HTML code.</title>
+<link rel="stylesheet" href="pod.css" type="text/css" />
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <link rev="made" href="mailto:root@localhost" />
 </head>
 
-<body style="background-color: white">
+<body>
 
-<p><a name="__index__"></a></p>
+
 <!-- INDEX BEGIN -->
+<div name="index">
+<p><a name="__index__"></a></p>
 
 <ul>
 
 	<li><a href="#name">NAME</a></li>
 	<li><a href="#synopsis">SYNOPSIS</a></li>
-	<li><a href="#widgetspecific_options">WIDGET-SPECIFIC OPTIONS</a></li>
 	<li><a href="#description">DESCRIPTION</a></li>
+	<ul>
+
+		<li><a href="#purpose">PURPOSE</a></li>
+		<li><a href="#version_0_06_">VERSION 0.06+</a></li>
+		<li><a href="#example">EXAMPLE</a></li>
+	</ul>
+
+	<li><a href="#widget_specific_options">WIDGET-SPECIFIC OPTIONS</a></li>
 	<li><a href="#widget_methods">WIDGET METHODS</a></li>
-	<li><a href="#supported_html">SUPPORTED HTML</a></li>
-	<li><a href="#supported_css">SUPPORTED CSS</a></li>
-	<li><a href="#images">IMAGES</a></li>
-	<li><a href="#example">EXAMPLE</a></li>
-	<li><a href="#bugs">BUGS</a></li>
+	<li><a href="#events">EVENTS</a></li>
+	<li><a href="#html_support">HTML SUPPORT</a></li>
 	<li><a href="#see_also">SEE ALSO</a></li>
 	<li><a href="#changes">CHANGES</a></li>
 	<li><a href="#author">AUTHOR</a></li>
 </ul>
+
+<hr name="index" />
+</div>
 <!-- INDEX END -->
 
-<hr />
 <p>
 </p>
 <h1><a name="name">NAME</a></h1>
-<p>Tk::HyperText - Create and manipulate ROText widgets which render HTML code.</p>
+<p>Tk::HyperText - An ROText widget which renders HTML code.</p>
 <p>
 </p>
 <hr />
 <h1><a name="synopsis">SYNOPSIS</a></h1>
 <pre>
-  my $hypertext = $mw-&gt;Scrolled (&quot;HyperText&quot;,
-    -scrollbars   =&gt; 'e',
-    -wrap         =&gt; 'word',
-    -linkcommand  =&gt; \&amp;onLink,  # what to do when &lt;a&gt; links are clicked
-    -titlecommand =&gt; \&amp;onTitle, # what to do when &lt;title&gt;s are found
+  use Tk::HyperText;</pre>
+<pre>
+  my $html = $mw-&gt;Scrolled ('HyperText',
+    -scrollbars =&gt; 'ose',
+    -wrap       =&gt; 'word',
   )-&gt;pack (-fill =&gt; 'both', -expand =&gt; 1);</pre>
 <pre>
-  # insert some HTML code
-  $hypertext-&gt;insert (&quot;end&quot;,&quot;&lt;body bgcolor=\&quot;black\&quot; text=\&quot;yellow\&quot;&gt;&quot;
-    . &quot;Hello, &lt;b&gt;world!&lt;/b&gt;&lt;/body&gt;&quot;);</pre>
-<p>
-</p>
-<hr />
-<h1><a name="widgetspecific_options">WIDGET-SPECIFIC OPTIONS</a></h1>
-<dl>
-<dt><strong><a name="item__2drerender"><strong>-rerender</strong></a></strong>
-
-<dd>
-<p>Boolean. When true (the default), the ENTIRE contents of your HyperText widget will
-be (re)rendered every time you modify it. In this way, if you insert, e.g. a ``bold''
-tag and don't close it, then insert new text, the new text should logically still be
-in bold, and it would be when this flag is true.</p>
-</dd>
-<dd>
-<p>When false, only the newly inserted text will be rendered independently of what else
-is already there. If re-rendering the page is too slow for you, try disabling this flag.</p>
-</dd>
-</li>
-<dt><strong><a name="item__2dtitlecommand"><strong>-titlecommand</strong></a></strong>
-
-<dd>
-<p>This should be a CODEREF pointing to a subroutine that will handle changes in a
-page's title. While HTML code is being parsed, when a title tag is found, it will
-call this method.</p>
-</dd>
-<dd>
-<p>The callback will received the following variables:</p>
-</dd>
-<dd>
+  $html-&gt;setHandler (Title    =&gt; \&amp;onNewTitle);
+  $html-&gt;setHandler (Resource =&gt; \&amp;onResource);
+  $html-&gt;setHandler (Submit   =&gt; \&amp;onFormSubmit);</pre>
 <pre>
-  $widget = a reference to the HyperText widget that wants to set a title.
-  $title  = the text in the &lt;title&gt; tag.</pre>
-</dd>
-</li>
-<dt><strong><a name="item__2dlinkcommand"><strong>-linkcommand</strong></a></strong>
-
-<dd>
-<p>This should be a CODEREF pointing to a subroutine that will handle the clicking
-of hyperlinks.</p>
-</dd>
-<dd>
-<p>The callback will received the following variables:</p>
-</dd>
-<dd>
-<pre>
-  $widget = a reference to the HyperText widget that invoked the link.
-  $href   = the value of the link's &quot;href&quot; attribute.
-  $target = the value of the link's &quot;target&quot; attribute.</pre>
-</dd>
-</li>
-<dt><strong><a name="item__2dattributes"><strong>-attributes</strong></a></strong>
-
-<dd>
-<p>This option will allow you to define all of the default settings for the display
-of HTML pages. Here's an example:</p>
-</dd>
-<dd>
-<pre>
-  my $html = $mw-&gt;Scrolled (&quot;HyperText&quot;,
-    -attributes =&gt; {
-      body =&gt; {
-        bgcolor =&gt; 'white',
-        text    =&gt; 'black',
-        link    =&gt; 'blue',
-        vlink   =&gt; 'purple',
-        alink   =&gt; 'red',
-      },
-      font =&gt; {
-        family =&gt; 'Arial',
-        size   =&gt; 3,
-        color  =&gt; '', # inherit from &lt;body&gt;
-        back   =&gt; '', # inherit from &lt;body&gt;
-      },
-    },
-  )-&gt;pack;</pre>
-</dd>
-</li>
-<dt><strong><a name="item__2dbasehref"><strong>-basehref</strong></a></strong>
-
-<dd>
-<p>The ``base href'' of the webpages being rendered. This should be the local file
-path (ex. ``./demolib''). The base href can be reset using the &lt;base&gt; tag
-in a webpage. The base href is used for locating external files, such as images.</p>
-</dd>
-</li>
-</dl>
+  $html-&gt;loadString (qq~&lt;html&gt;
+    &lt;head&gt;
+    &lt;title&gt;Hello world!&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body bgcolor=&quot;#0099FF&quot;&gt;
+    &lt;font size=&quot;6&quot; family=&quot;Impact&quot; color=&quot;#FFFFFF&quot;&gt;
+    &lt;strong&gt;Hello, world!&lt;/strong&gt;
+    &lt;/font&gt;
+    &lt;/body&gt;
+    &lt;/html&gt;
+  ~);</pre>
 <p>
 </p>
 <hr />
 <h1><a name="description">DESCRIPTION</a></h1>
-<p>Tk::HyperText is a derived Tk::ROText class which supports the automatic rendering
-of HTML code. It's designed to be easily useable as a drop-in replacement to any
-Tk::ROText widget. Rendering HTML code is as easy as <strong>insert</strong>ing it as raw HTML,
-as shown in the synopsis.</p>
+<p><code>Tk::HyperText</code> is a widget derived from <code>Tk::ROText</code> that renders HTML
+code.</p>
+<p>
+</p>
+<h2><a name="purpose">PURPOSE</a></h2>
+<p>First of all, <strong>Tk::HyperText is NOT expected to become a full-fledged web
+browser widget</strong>. This module's original idea was just to be a simple
+HTML-rendering widget, specifically to match the capabilities of the
+<em>AOL Instant Messenger</em>'s HTML widgets. That is, to render basic text
+formatting, images, and hyperlinks. Anything this module does that's extra
+is only there because I was up to the challenge.</p>
+<p>
+</p>
+<h2><a name="version_0_06_">VERSION 0.06+</a></h2>
+<p>This module is <strong>NOT</strong> backwards compatible with versions 0.05 and below.
+Specifically, the module was rewritten to use <code>HTML::TokeParser</code> as its
+HTML parsing engine instead of parsing it as plain text. Also, the methods
+have all been changed. The old module's overloading of the standard
+<code>Tk::Text</code> methods was causing all kinds of problems, and since this isn't
+really a &quot;drop-in&quot; replacement for the other Text widgets, its methods don't
+need to follow the same format.</p>
+<p>Also, support for Cascading StyleSheets doesn't work at this time. It may be
+re-implemented at a later date, but, as this widget is not meant to become
+a full-fledged web browser (see <a href="#purpose">PURPOSE</a>), the CSS support might not
+return.</p>
+<p>
+</p>
+<h2><a name="example">EXAMPLE</a></h2>
+<p>Run the `demo.pl` script included in the distribution.</p>
 <p>
 </p>
 <hr />
-<h1><a name="widget_methods">WIDGET METHODS</a></h1>
-<p>In addition to all of the methods exported by Tk::ROText and Tk::Text, the following
-methods have special behaviors:</p>
+<h1><a name="widget_specific_options">WIDGET-SPECIFIC OPTIONS</a></h1>
 <dl>
-<dt><strong><a name="item_insert"><em>$text-&gt;</em><strong>insert</strong> <em>(where, html-code)</em></a></strong>
+<dt><strong><a name="continuous_continue" class="item">-continuous, -continue</a></strong>
 
 <dd>
-<p>Insert new HTML code, and render it automatically. Note that currently, only inserting
-to the ``end'' works. See <a href="#bugs">BUGS</a> below.</p>
+<p>Setting this option to 1 tells the widget <strong>not</strong> to re-render the entire
+contents of the widget each time the contents are updated. The default value
+is 0, so the entire page contents are rendered on any updates. This causes
+the code to be &quot;continuous&quot;, so that i.e. if you fail to close a bold tag and
+then insert more code, the new code should carry on the unclosed tag and
+appear in bold. Setting this option to 1 would render the new code
+independently from the existing page and is therefore unnatural in HTML.</p>
+</dd>
+<dd>
+<p><code>-continue</code> is an alias for <code>-continuous</code> if you're terrible at spelling.</p>
 </dd>
 </li>
-<dt><strong><a name="item_delete"><em>$text-&gt;</em><strong>delete</strong> <em>(start, end)</em></a></strong>
+<dt><strong><a name="allow_deny" class="item">-allow, -deny</a></strong>
 
 <dd>
-<p>Delete content from the textbox. Note that currently you can only delete EVERYTHING.
-See <a href="#bugs">BUGS</a> below.</p>
+<p>Define tags that are allowed or denied. See <a href="#widget_methods">WIDGET METHODS</a> for more
+details.</p>
 </dd>
 </li>
-<dt><strong><a name="item_get"><em>$text-&gt;</em><strong>get</strong> <em>(start, end)</em></a></strong>
+<dt><strong><a name="attributes" class="item">-attributes</a></strong>
 
 <dd>
-<p>Get the HTML code back out of the widget. Note that currently this gets ALL of the code.
-See <a href="#bugs">BUGS</a>. This returns the actual HTML code, not just the text that's been rendered.</p>
-</dd>
-</li>
-<dt><strong><a name="item_clear"><em>$text-&gt;</em><strong>clear</strong></a></strong>
-
-<dd>
-<p>Clear the entire text widget display.</p>
-</dd>
-</li>
-<dt><strong><a name="item_clearhistory"><em>$text-&gt;</em><strong>clearHistory</strong></a></strong>
-
-<dd>
-<p>Clear the history in the text widget. This will make all the links that were ``visited
-links'' become ``unvisited links'' again.</p>
-</dd>
-</li>
-<dt><strong><a name="item_namesmode"><em>$text-&gt;</em><strong>namesMode</strong> <em>([new-mode])</em></a></strong>
-
-<dd>
-<p>Change the permissions mode. Valid options are <code>allow_all, allow_some, deny_some, deny_all</code>.
-The default is <code>allow_all</code>. Returns the current mode.</p>
-</dd>
-</li>
-<dt><strong><a name="item_namesallow"><em>$text-&gt;</em><strong>namesAllow</strong> <em>([tag-list])</em></a></strong>
-
-<dd>
-<p>Add the list of tags to the allow list when the permissions mode is set to <code>allow_some</code>, or
-removes them from the deny list if the mode is <code>deny_some</code>.</p>
+<p>Since Tk::HyperText doesn't yet support Cascading Style Sheets, the only
+alternative is to send in <a href="#attributes"><code>-attributes</code></a>. This data structure defines some
+default styles for use within the rendered pages.</p>
 </dd>
 <dd>
 <pre>
-  $hypertext-&gt;namesAllow (&quot;&lt;body&gt;&quot;, &quot;&lt;font&gt;&quot;, &quot;&lt;br&gt;&quot;);</pre>
-</dd>
-</li>
-<dt><strong><a name="item_namesdeny"><em>$text-&gt;</em><strong>namesDeny</strong> <em>([tag-list])</em></a></strong>
-
-<dd>
-<p>Add the list of tags to the deny list when the permissions mode is set to <code>deny_some</code>, or
-removes them from the allow list if the mode is <code>allow_some</code>.</p>
+  my $html = $mw-&gt;Scrolled('HyperText',
+    -attributes =&gt; {
+      -anchor =&gt; {              # Hyperlink colors
+        -normal  =&gt; '#0000FF',  # or 'blue'
+        -hover   =&gt; '#FF0000',  # or 'red'
+        -active  =&gt; '#FF0000',  # or 'red'
+        -visited =&gt; '#990099',  # or 'purple'
+      },
+      -font =&gt; {
+        -family =&gt; 'Times',
+        -mono   =&gt; 'Courier',
+        -size   =&gt; 'medium',    # or any HTML size
+                                # (1..6, xx-small..xx-large)</pre>
 </dd>
 <dd>
 <pre>
-  $hypertext-&gt;namesDeny (&quot;&lt;img&gt;&quot;, &quot;&lt;hr&gt;&quot;);</pre>
+        # Text styles, set them to 1 to apply the effect.
+        # I don't see why anyone would want to use these,
+        # but they're here anyway.
+        -bold   =&gt; 0, # Bold
+        -italic =&gt; 0, # Italic
+        -under  =&gt; 0, # Underline
+        -over   =&gt; 0, # Overstrike
+      },
+      -style =&gt; {
+        -margins =&gt; 0,         # Text margins
+        -color   =&gt; '#000000', # Text color
+        -back    =&gt; '#FFFFFF', # Text BG color
+      },
+    },
+  );</pre>
 </dd>
 </li>
 </dl>
 <p>
 </p>
 <hr />
-<h1><a name="supported_html">SUPPORTED HTML</a></h1>
-<p>The following HTML tags and attributes are fully supported by this module:</p>
+<h1><a name="widget_methods">WIDGET METHODS</a></h1>
+<dl>
+<dt><strong><a name="sethandler" class="item"><em>$text</em>-&gt;<strong>setHandler</strong> <em>(name =&gt; event)</em></a></strong>
+
+<dd>
+<p>Define a handler for certain events that happen within the widget. See
+<a href="#events">EVENTS</a> for more information.</p>
+</dd>
+<dd>
 <pre>
-  &lt;html&gt;, &lt;head&gt;
-  &lt;title&gt;      *calls -titlecommand when found
-  &lt;link&gt;       (type media href)
-  &lt;style&gt;      (type)
-  &lt;body&gt;       (bgcolor, link, vlink, alink, text)
-  &lt;basefont&gt;   (face, size, color)
-  &lt;base&gt;       (href)
-  &lt;font&gt;       (face, size, color, back)
-  &lt;img&gt;        (src, align, hspace, vspace)*
-  &lt;hr&gt;         (size, width)
-  &lt;a&gt;          (href, target)
-  &lt;ol&gt;, &lt;ul&gt;   (type, start)
+  $html-&gt;setHandler (Title =&gt; sub {
+    my ($self,$newTitle) = @_;</pre>
+</dd>
+<dd>
+<pre>
+    $mw-&gt;configure (-title =&gt; $newTitle);
+  });</pre>
+</dd>
+</li>
+<dt><strong><a name="allowedtags" class="item"><em>$text</em>-&gt;<strong>allowedTags</strong> <em>(tags)</em></a></strong>
+
+<dd>
+<p>Specify a set of tags that are allowed to be rendered. Pass in the tag names
+as an array. If the &quot;allow list&quot; has any entries, <strong>only</strong> these tags will be
+rendered.</p>
+</dd>
+</li>
+<dt><strong><a name="deniedtags" class="item"><em>$text</em>-&gt;<strong>deniedTags</strong> <em>(tags)</em></a></strong>
+
+<dd>
+<p>Specify a set of tags that are <strong>not</strong> allowed to be rendered. If the &quot;allow
+list&quot; is empty and the &quot;denied list&quot; has any entries, then all tags are
+allowed <strong>except</strong> for those in the denied list. If any entries in the denied
+list conflict with entries in the allowed list, those tags are <strong>not</strong>
+allowed.</p>
+</dd>
+</li>
+<dt><strong><a name="allowhypertext" class="item"><em>$text</em>-&gt;<strong>allowHypertext</strong> <em>()</em></a></strong>
+
+<dd>
+<p>This is a preset allow/deny scheme. It allows all hypertext tags (basic
+text formatting, images, and horizontal rules) but doesn't allow tables,
+forms, lists, or other complicated tags. This will make it match the
+capabilities of <em>AOL Instant Messenger</em>'s HTML rendering widgets.</p>
+</dd>
+<dd>
+<p>It will allow the following tags:</p>
+</dd>
+<dd>
+<pre>
+  &lt;html&gt;, &lt;head&gt;, &lt;title&gt;, &lt;body&gt;, &lt;a&gt;, &lt;p&gt;, &lt;br&gt;, &lt;hr&gt;,
+  &lt;img&gt;, &lt;font&gt;, &lt;center&gt;, &lt;sup&gt;, &lt;sub&gt;, &lt;b&gt;, &lt;i&gt;,
+  &lt;u&gt;, &lt;s&gt;</pre>
+</dd>
+<dd>
+<p>All other tags are denied.</p>
+</dd>
+</li>
+<dt><strong><a name="alloweverything" class="item"><em>$text</em>-&gt;<strong>allowEverything</strong> <em>()</em></a></strong>
+
+<dd>
+<p>Allows all supported tags to be rendered. It resets the &quot;allow&quot; and
+&quot;deny&quot; lists to be blank.</p>
+</dd>
+</li>
+<dt><strong><a name="loadstring" class="item"><em>$text</em>-&gt;<strong>loadString</strong> <em>(html_code)</em></a></strong>
+
+<dd>
+<p>Render a string of HTML code into the text widget. This will replace all of
+the current contents of the widget with the new HTML code.</p>
+</dd>
+</li>
+<dt><strong><a name="loadblank" class="item"><em>$text</em>-&gt;<strong>loadBlank</strong> <em>()</em></a></strong>
+
+<dd>
+<p>Blanks out the contents of the widget (similar to the &quot;<code>about:blank</code>&quot; URI
+in most modern web browsers).</p>
+</dd>
+</li>
+<dt><strong><a name="clearhistory" class="item"><em>$text</em>-&gt;<strong>clearHistory</strong> <em>()</em></a></strong>
+
+<dd>
+<p>Resets the browsing history (so &quot;visited links&quot; will become &quot;normal links&quot;
+again).</p>
+</dd>
+</li>
+<dt><strong><a name="gettext" class="item"><em>$text</em>-&gt;<strong>getText</strong> <em>([as_html])</em></a></strong>
+
+<dd>
+<p>Returns the contents of the widget as a string. Send a true value as an
+argument to get the contents back including HTML code. Otherwise, only the
+plain text content is returned.</p>
+</dd>
+</li>
+</dl>
+<p>
+</p>
+<hr />
+<h1><a name="events">EVENTS</a></h1>
+<p>All events receive a reference to its parent widget as <code>$_[0]</code>.
+The following are the event handlers currently supported by
+<code>Tk::HyperText</code>:</p>
+<dl>
+<dt><strong><a name="title" class="item">Title ($self, $newTitle)</a></strong>
+
+<dd>
+<p>This event is called every time a <code>&lt;title&gt;...&lt;/title&gt;</code> sequence is found
+in the HTML code. <code>$newTitle</code> is the text of the new page title.</p>
+</dd>
+</li>
+<dt><strong><a name="resource" class="item">Resource ($self, %info)</a></strong>
+
+<dd>
+<p>This event is called whenever an external resource is requested (such as an
+image or a hyperlink trying to link to another page). <code>%info</code> contains all
+the information about the requested resource.</p>
+</dd>
+<dd>
+<pre>
+  # For hyperlinks (&lt;a&gt; tags)
+  %info = (
+    tag    =&gt; 'a',                 # The HTML tag.
+    href   =&gt; '<a href="http://google.com">http://google.com</a>', # The &lt;a href&gt; attribute.
+    src    =&gt; '<a href="http://google.com">http://google.com</a>', # src is an alias for href
+    target =&gt; '_blank',            # The &lt;a target&gt; attribute
+  );</pre>
+</dd>
+<dd>
+<pre>
+  # For images (&lt;img&gt; tags)
+  %info = (
+    tag    =&gt; 'img',        # The HTML tag.
+    src    =&gt; 'avatar.jpg', # The &lt;img src&gt; attribute.
+    width  =&gt; 48,           # The &lt;img width&gt; attribute.
+    height =&gt; 48,           # The &lt;img height&gt; attribute.
+    vspace =&gt; '',           # &lt;img vspace&gt;
+    hspace =&gt; '',           # &lt;img hspace&gt;
+    align  =&gt; '',           # &lt;img align&gt;
+    alt    =&gt; 'alt text',   # &lt;img alt&gt;
+  );</pre>
+</dd>
+<dd>
+<p><strong>Note about Images:</strong> The <a href="#resource"><code>Resource</code></a> event, when called for an image, wants
+you to return the image's data, Base64-encoded. Otherwise, the image on the
+page will show up as a &quot;broken image&quot; icon. Here is an example of how to
+handle image resources:</p>
+</dd>
+<dd>
+<pre>
+  use LWP::Simple;
+  use MIME::Base64 qw(encode_base64);</pre>
+</dd>
+<dd>
+<pre>
+  $html-&gt;setHandler (Resource =&gt; sub {
+    my ($self,%info) = @_;</pre>
+</dd>
+<dd>
+<pre>
+    if ($info{tag} eq 'img') {</pre>
+</dd>
+<dd>
+<pre>
+      # If an <a href="http://">http://</a> link, get the image from the web.
+      if ($info{src} =~ /^http/i) {
+        my $bin = get $info{src};
+        my $enc = encode_base64($bin);
+        return $enc;
+      }</pre>
+</dd>
+<dd>
+<pre>
+      # Otherwise, read it from a local file.
+      else {
+        if (-f $src) {
+          open (READ, $src);
+          binmode READ;
+          my @bin = &lt;READ&gt;;
+          close (READ);
+          chomp @bin;</pre>
+</dd>
+<dd>
+<pre>
+          my $enc = encode_base64(join(&quot;\n&quot;,@bin));
+          return enc;
+        }
+      }
+    }</pre>
+</dd>
+<dd>
+<pre>
+    return undef;
+  });</pre>
+</dd>
+<dd>
+<p>On hyperlink resources, the module doesn't need or expect any return value.
+It should be up to the handler to do what it needs (i.e. fetch the source
+of the page, blank out the HTML widget and then <a href="#loadstring"><code>loadString</code></a> the new code
+into it).</p>
+</dd>
+</li>
+<dt><strong><a name="submit" class="item">Submit ($self,%info)</a></strong>
+
+<dd>
+<p>This event is called when an HTML form has been submitted. <code>%info</code> is a
+hash containing the information about the event.</p>
+</dd>
+<dd>
+<pre>
+  %info = (
+    form    =&gt; 'login',      # The &lt;form name&gt; attribute.
+    action  =&gt; '/login.cgi', # The &lt;form action&gt; attribute.
+    method  =&gt; 'POST',       # The &lt;form method&gt; attribute.
+    enctype =&gt; 'text/plain', # The &lt;form enctype&gt; attribute.
+    fields  =&gt; {             # Hashref of form names and values.
+      username =&gt; 'soandso',
+      password =&gt; 'bigsecret',
+      remember =&gt; 1,
+    },
+  );</pre>
+</dd>
+<dd>
+<p>The event doesn't want or expect a return value, similarly to the <a href="#resource"><code>Resource</code></a>
+event for normal anchor tags. Your code should know what to do with this
+event (i.e. get <code>LWP::UserAgent</code> to post the form to a remote web address,
+stream the results of the request in through <a href="#loadstring"><code>loadString</code></a>, etc.)</p>
+</dd>
+</li>
+</dl>
+<p>
+</p>
+<hr />
+<h1><a name="html_support">HTML SUPPORT</a></h1>
+<p>The following tags and attributes are supported by this module:</p>
+<pre>
+  &lt;html&gt;
+  &lt;head&gt;
+  &lt;title&gt;
+  &lt;body&gt;     (bgcolor, text, link, alink, vlink)
+  &lt;a&gt;        (href, target)
+  &lt;br&gt;
+  &lt;p&gt;
+  &lt;form&gt;     (name, action, method, enctype)
+  &lt;textarea&gt; (name, cols, rows, disabled)
+  &lt;select&gt;   (name, size, multiple)
+  &lt;option&gt;   (value, selected)
+  &lt;input&gt;    (name, type, size, value, maxlength, disabled, checked)
+              types: text, password, checkbox, radio, button, submit, reset
+  &lt;table&gt;    (border, cellspacing, cellpadding)
+  &lt;tr&gt;
+  &lt;td&gt;       (colspan, rowspan)
+    &lt;th&gt;
+    &lt;thead&gt;
+    &lt;tbody&gt;
+    &lt;tfoot&gt;
+  &lt;hr&gt;       (height, size)
+  &lt;img&gt;      (src, width, height, vspace, hspace, align, alt)*
+  &lt;font&gt;     (face, size, color, back)
+    &lt;basefont&gt;
+  &lt;h1&gt;..&lt;h6&gt;
+  &lt;ol&gt;       (type, start)
+  &lt;ul&gt;       (type)
   &lt;li&gt;
-  &lt;div&gt;        (align=left|center|right)
-  &lt;span&gt;
   &lt;blockquote&gt;
-  &lt;p&gt;, &lt;br&gt;
+  &lt;div&gt;      (align)
+  &lt;span&gt;
   &lt;pre&gt;
-  &lt;code&gt;, &lt;tt&gt;, &lt;kbd&gt;, &lt;samp&gt;
-  &lt;center&gt;, &lt;right&gt;, &lt;left&gt;
-  &lt;h1&gt; - &lt;h6&gt;
-  &lt;sup&gt;, &lt;sub&gt;
-  &lt;b&gt;, &lt;strong&gt;
-  &lt;i&gt;, &lt;em&gt;, &lt;address&gt;, &lt;var&gt;, &lt;cite&gt;, &lt;def&gt;
-  &lt;u&gt;, &lt;ins&gt;
-  &lt;s&gt;, &lt;del&gt;</pre>
-<p>* Image alignment must be ``top'', ``middle'', ``bottom'', or ``baseline''. Tk::Text doesn't
-support ``left'' and ``right'' alignments.</p>
-<p>
-</p>
-<hr />
-<h1><a name="supported_css">SUPPORTED CSS</a></h1>
-<p>CSS support is relatively new as of version 0.05. The following ``kinds'' of CSS are
-supported:</p>
-<pre>
-  External CSS files (&lt;link type=&quot;text/css&quot; href=&quot;external.css&quot;&gt;)
-  Internal CSS code (&lt;style type=&quot;text/css&quot;&gt;)</pre>
-<p>The following type is <strong>NOT</strong> supported:</p>
-<pre>
-  Inline CSS (&lt;span style=&quot;...&quot;&gt;)</pre>
-<p>As far as the actual CSS code, the following attributes are supported:</p>
-<pre>
-  background       (only the &quot;color&quot; part)
-  background-color
-  font-family
-  font-size        *
-  font-style
-  font-weight      (bold, lighter, normal--lighter is the same as normal)
-  text-decoration  (none, underline, line-thru)
-  text-align       (left, center, right)
-  color</pre>
-<p>* With <code>font-size</code>, if you don't specify a unit of measurement, it's taken as
-a regular HTML font size (range 1 through 6). If you do specify a unit (i.e. px,
-pt, em, etc), the font size will be taken as a <strong>point size</strong>.</p>
-<p>
-</p>
-<hr />
-<h1><a name="images">IMAGES</a></h1>
-<p>A couple of default images were provided within the module (Base64-encoded) to
-display when something is wrong with an image in your HTML code.</p>
-<p><code>$Tk::HyperText::IMG_BROKEN</code> is the Base64 data for the ``image not found'' image.
-It displays as a PNG image of a red ``X'' within a sunken-bordered box.</p>
-<p><code>$Tk::HyperText::IMG_INVALID</code> is the Base64 data for the ``invalid image data''
-image. It displays as a PNG image of a yellow exclamation mark within a sunken
-box.</p>
-<p>These images are included in their regular PNG form in the distribution of
-Tk::HyperText. You can reset these variables in your program if you'd like to
-have customized default images to handle these cases.</p>
-<p>
-</p>
-<hr />
-<h1><a name="example">EXAMPLE</a></h1>
-<p>Run the `demo.pl` program included in the distribution for a demonstration. It's a
-kind of simple web browser that views HTML pages in the ``demolib'' directory, and
-supports hyperlinks that link from one page to another.</p>
-<p>
-</p>
-<hr />
-<h1><a name="bugs">BUGS</a></h1>
-<p>As noted above, the <strong>insert</strong> method only inserts at the end, <strong>delete</strong> deletes
-everything, and <strong>get</strong> gets everything. I plan on coming up with a way to fix this
-in a later version.</p>
-<p>There's a minor bug in the counting of alphabetic ordered lists. It counts them
-from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
+  &lt;code&gt;
+    &lt;tt&gt;
+    &lt;kbd&gt;
+    &lt;samp&gt;
+  &lt;center&gt;
+    &lt;right&gt;
+    &lt;left&gt;
+  &lt;sup&gt;
+  &lt;sub&gt;
+  &lt;big&gt;
+  &lt;small&gt;
+  &lt;b&gt;
+    &lt;strong&gt;
+  &lt;i&gt;
+    &lt;em&gt;
+    &lt;address&gt;
+    &lt;var&gt;
+    &lt;cite&gt;
+    &lt;def&gt;
+  &lt;u&gt;
+    &lt;ins&gt;
+  &lt;s&gt;
+    &lt;del&gt;</pre>
 <p>
 </p>
 <hr />
@@ -314,8 +476,12 @@ from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
 </p>
 <hr />
 <h1><a name="changes">CHANGES</a></h1>
-<p>0.05 July 11, 2007</p>
 <pre>
+  0.06 July 14, 2008
+  - The module uses HTML::TokeParser now and does &quot;real&quot; HTML parsing.
+  - Badly broke backwards compatibility.</pre>
+<pre>
+  0.05 July 11, 2007
   - Added support for &quot;tag permissions&quot;, so that you can allow/deny specific tags from
     being rendered (i.e. say you're making a chat client which uses HTML and you don't
     want people inserting images into their messages, or style sheets, etc)
@@ -332,8 +498,8 @@ from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
   - Added some actual use for the &quot;active link color&quot;: it's used as the hover color
     on links (using it as a true active color is mostly useless, since most of the
     time the page won't remain very long when clicking on a link to even see it)</pre>
-<p>0.04 June 23, 2007</p>
 <pre>
+  0.04 June 23, 2007
   - Added support for the &lt;basefont&gt; tag.
   - Added support for &lt;ul&gt;, &lt;ol&gt;, and &lt;li&gt;. I've even extended the HTML specs a
     little and added &quot;diamonds&quot; as a shape for &lt;ul&gt;, and allowed &lt;ul&gt; to specify
@@ -341,19 +507,22 @@ from A to Z, then AA to AY, B, BA to BY, C, CA to CY, D, etc.</p>
   - Added a &quot;page history&quot;, so that the &quot;visited link color&quot; on pages can actually
     be applied to the links.
   - Fixed the &lt;blockquote&gt; so that the margin applies to the right side as well.</pre>
-<p>0.02 June 20, 2007</p>
 <pre>
+  0.02 June 20, 2007
   - Bugfix: on consecutive insert() commands (without clearing it in between),
     the entire content of the HTML already in the widget would be inserted again,
     in addition to the new content. This has been fixed.</pre>
-<p>0.01 June 20, 2007</p>
 <pre>
+  0.01 June 20, 2007
   - Initial release.</pre>
 <p>
 </p>
 <hr />
 <h1><a name="author">AUTHOR</a></h1>
-<p>Casey Kirsle, &lt;casey at cuvou.net&gt;</p>
+<p>Casey Kirsle, <a href="http://www.cuvou.com/">http://www.cuvou.com/</a></p>
+<p>This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.10.0 or,
+at your option, any later version of Perl 5 you may have available.</p>
 
 </body>
 

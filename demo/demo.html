@@ -9,7 +9,7 @@
 This page demonstrates some of the capabilities of Tk::HyperText's rendering
 power.
 
-<hr size="10">
+<hr>
 
 <h1>Heading Level 1</h1>
 
@@ -181,6 +181,50 @@ This image points to a file which doesn't exist: <img src="nothing.png"><p>
 Similarly, this image points to a file which is not an image: <img src="demo.html">
 
 <hr size="10">
+
+<h1>Tables</h1>
+
+<table border="2" cellspacing="2" cellpadding="2">
+	<tr>
+		<td colspan="2">This is a table in Tk::HyperText.</td>
+	</tr>
+	<tr>
+		<td>This is a cell.</td>
+		<td>As is this.</td>
+	</tr>
+</table>
+
+<hr>
+
+<h1>Forms</h1>
+
+This tests various form elements. This form is "submittable" -- it'll POST back
+to the index page.<p>
+
+<form name="login" action="index.html" method="POST">
+
+Login Name: <input type="text" size="20" name="name"><br>
+Password: <input type="password" size="20" name="pass"><br>
+<input type="checkbox" name="remember" value="yes" checked> Remember me<p>
+
+Favorite Color:<br>
+<input type="radio" name="color" value="red" checked> Red<br>
+<input type="radio" name="color" value="blue"> Blue<br>
+<input type="radio" name="color" value="green"> Green<p>
+
+<select name="select">
+<option value="Click me!" selected>Click me!</option>
+<option value="Select me!">Select me!</option>
+</select><p>
+
+Leave a short comment:<br>
+<textarea cols="20" rows="3" name="comment"></textarea><p>
+
+Submit the form:<br>
+<input type="submit" value="Submit Me!">&nbsp;<input type="reset" value="Reset">
+</form>
+
+<hr>
 
 <h1>Blockquotes</h1>
 

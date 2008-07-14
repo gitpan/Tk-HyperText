@@ -1,13 +1,16 @@
 Changes
-demo.pl
 Makefile.PL
 MANIFEST
 README
-demolib/about.html
-demolib/demo.html
-demolib/escape.html
-demolib/gba.png
-demolib/index.html
-demolib/tags.html
+pod.css
+HyperText.html
+demo.pl
+demo/about.html
+demo/demo.html
+demo/escape.html
+demo/gba.png
+demo/index.html
+demo/tk.png
 t/Tk-HyperText.t
 lib/Tk/HyperText.pm
+META.yml                                 Module meta-data (added by MakeMaker)

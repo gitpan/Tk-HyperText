@@ -1,7 +1,10 @@
 Revision history for Perl extension Tk::HyperText.
 
-0.05 July 11, 2007
+  0.06 July 14, 2008
+  - The module uses HTML::TokeParser now and does "real" HTML parsing.
+  - Badly broke backwards compatibility.
 
+  0.05 July 11, 2007
   - Added support for "tag permissions", so that you can allow/deny specific tags from
     being rendered (i.e. say you're making a chat client which uses HTML and you don't
     want people inserting images into their messages, or style sheets, etc)
@@ -19,8 +22,7 @@ Revision history for Perl extension Tk::HyperText.
     on links (using it as a true active color is mostly useless, since most of the
     time the page won't remain very long when clicking on a link to even see it)
 
-0.04 June 23, 2007
-
+  0.04 June 23, 2007
   - Added support for the <basefont> tag.
   - Added support for <ul>, <ol>, and <li>. I've even extended the HTML specs a
     little and added "diamonds" as a shape for <ul>, and allowed <ul> to specify
@@ -29,13 +31,10 @@ Revision history for Perl extension Tk::HyperText.
     be applied to the links.
   - Fixed the <blockquote> so that the margin applies to the right side as well.
 
-0.02 June 20, 2007
-
+  0.02 June 20, 2007
   - Bugfix: on consecutive insert() commands (without clearing it in between),
     the entire content of the HTML already in the widget would be inserted again,
     in addition to the new content. This has been fixed.
 
-0.01 June 20, 2007
-
+  0.01 June 20, 2007
   - Initial release.
-
