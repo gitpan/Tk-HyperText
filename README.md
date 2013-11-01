@@ -1,24 +1,25 @@
-Tk-HyperText version 0.06
-=========================
+# Tk::HyperText
 
-INSTALLATION
+## INSTALLATION
 
 To install this module type the following:
 
-   perl Makefile.PL
-   make
-   make test
-   make install
+```bash
+perl Makefile.PL
+make
+make test
+make install
+```
 
-DEPENDENCIES
+## DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  Tk (around version 802.027)
+* Tk (around version 802.027)
 
-COPYRIGHT AND LICENSE
+## COPYRIGHT AND LICENSE
 
-Copyright (C) 2008 by Casey Kirsle
+Copyright (C) 2013 by Noah Petherbridge
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.10.0 or,

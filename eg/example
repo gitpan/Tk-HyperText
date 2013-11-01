@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use lib "./lib";
+use lib "../lib";
 use Tk;
 use Tk::HyperText;
 use LWP::Simple;
